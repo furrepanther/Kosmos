@@ -1,0 +1,17 @@
+{
+  "persona_id": "001",
+  "persona_name": "Dr. Sarah Chen",
+  "version": "v001",
+  "timestamp": "2026-02-07T17:39:38",
+  "model": "deepseek/deepseek-chat",
+  "provider": "litellm",
+  "kosmos_git_sha": "f9ecf1d44b53",
+  "config_hash": "sha256:retroactive_archive",
+  "tier1_completed": true,
+  "tier2_completed": false,
+  "tier3_completed": true,
+  "tier2_note": "Pre-fix KOSMOS_EVALUATION_REPORT.md (2026-02-06, score 3.9/10) was excluded because it evaluated a different codebase state than Tier 1. Tier 2 should be regenerated from current Tier 1 data.",
+  "checks_passed": 36,
+  "checks_total": 37,
+  "duration_seconds": 749.3
+}

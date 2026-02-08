@@ -55,6 +55,7 @@ class ExecutionMetadata(BaseModel):
     timeout_occurred: bool = Field(default=False, description="Whether timeout occurred")
     errors: List[str] = Field(default_factory=list, description="Errors encountered")
     warnings: List[str] = Field(default_factory=list, description="Warnings generated")
+    data_source: Optional[str] = Field(None, description="Data source: 'file' or 'synthetic'")
 
 
 class StatisticalTestResult(BaseModel):

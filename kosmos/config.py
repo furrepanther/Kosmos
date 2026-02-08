@@ -472,7 +472,7 @@ class LiteratureConfig(BaseSettings):
         alias="PDF_DOWNLOAD_TIMEOUT"
     )
     search_timeout: int = Field(
-        default=60,
+        default=90,
         ge=10,
         le=300,
         description="Literature search timeout in seconds (all sources combined)",
@@ -981,6 +981,45 @@ class KosmosConfig(BaseSettings):
         case_sensitive=False,
         extra="ignore"
     )
+
+    @model_validator(mode="after")
+    def sync_litellm_env_vars(self):
+        """Sync LITELLM_* env vars into the nested LiteLLMConfig.
+
+        Pydantic's nested BaseSettings submodels don't automatically pick up
+        env vars from the parent's .env file unless env_nested_delimiter is
+        configured. We resolve this manually for the LiteLLM config fields.
+        """
+        if self.litellm is not None:
+            env_map = {
+                "LITELLM_MODEL": "model",
+                "LITELLM_API_KEY": "api_key",
+                "LITELLM_API_BASE": "api_base",
+                "LITELLM_MAX_TOKENS": "max_tokens",
+                "LITELLM_TEMPERATURE": "temperature",
+                "LITELLM_TIMEOUT": "timeout",
+            }
+            for env_var, field_name in env_map.items():
+                val = os.environ.get(env_var)
+                if val is not None:
+                    current = getattr(self.litellm, field_name, None)
+                    # Only override if the field still has its default value
+                    default_vals = {
+                        "model": "gpt-3.5-turbo",
+                        "api_key": None,
+                        "api_base": None,
+                        "max_tokens": 4096,
+                        "temperature": 0.7,
+                        "timeout": 120,
+                    }
+                    if current == default_vals.get(field_name, None):
+                        # Cast to correct type
+                        if field_name in ("max_tokens", "timeout"):
+                            val = int(val)
+                        elif field_name == "temperature":
+                            val = float(val)
+                        object.__setattr__(self.litellm, field_name, val)
+        return self
 
     @model_validator(mode="after")
     def validate_provider_config(self):

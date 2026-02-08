@@ -46,7 +46,8 @@ class ExecutionResult:
         error: Optional[str] = None,
         error_type: Optional[str] = None,
         execution_time: float = 0.0,
-        profile_result: Optional[Any] = None  # ProfileResult from kosmos.core.profiling
+        profile_result: Optional[Any] = None,  # ProfileResult from kosmos.core.profiling
+        data_source: Optional[str] = None  # 'file' or 'synthetic'
     ):
         self.success = success
         self.return_value = return_value
@@ -56,6 +57,7 @@ class ExecutionResult:
         self.error_type = error_type
         self.execution_time = execution_time
         self.profile_result = profile_result
+        self.data_source = data_source
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -66,7 +68,8 @@ class ExecutionResult:
             'stderr': self.stderr,
             'error': self.error,
             'error_type': self.error_type,
-            'execution_time': self.execution_time
+            'execution_time': self.execution_time,
+            'data_source': self.data_source,
         }
 
         # Include profile data if available
@@ -100,7 +103,8 @@ class CodeExecutor:
         use_sandbox: bool = False,
         sandbox_config: Optional[Dict[str, Any]] = None,
         enable_profiling: bool = False,
-        profiling_mode: str = "light"
+        profiling_mode: str = "light",
+        test_determinism: bool = False
     ):
         """
         Initialize code executor.
@@ -113,6 +117,7 @@ class CodeExecutor:
             sandbox_config: Optional sandbox configuration (cpu_limit, memory_limit, timeout)
             enable_profiling: If True, profile code execution (default: False)
             profiling_mode: Profiling mode: light, standard, full (default: light)
+            test_determinism: If True, run determinism check after successful execution (default: False)
         """
         self.max_retries = max_retries
         self.retry_delay = retry_delay
@@ -121,6 +126,7 @@ class CodeExecutor:
         self.sandbox_config = sandbox_config or {}
         self.enable_profiling = enable_profiling
         self.profiling_mode = profiling_mode
+        self.test_determinism = test_determinism
 
         # Initialize retry strategy for self-correcting execution (Issue #54)
         self.retry_strategy = RetryStrategy(max_retries=max_retries, base_delay=retry_delay)
@@ -199,6 +205,25 @@ class CodeExecutor:
                             result.error_type or "Unknown", True
                         )
                     logger.info(f"Code executed successfully in {result.execution_time:.2f}s")
+
+                    # Optional determinism check
+                    if self.test_determinism:
+                        try:
+                            from kosmos.safety.reproducibility import ReproducibilityManager
+                            mgr = ReproducibilityManager()
+                            is_deterministic = mgr.test_determinism(
+                                experiment_function=lambda: self._execute_once(current_code, local_vars),
+                                seed=42, n_runs=2
+                            )
+                            if not is_deterministic:
+                                logger.warning("Non-deterministic results detected")
+                                if result.return_value and isinstance(result.return_value, dict):
+                                    result.return_value.setdefault('warnings', []).append(
+                                        "Non-deterministic results detected"
+                                    )
+                        except Exception as det_err:
+                            logger.debug(f"Determinism check failed (non-fatal): {det_err}")
+
                     return result
                 else:
                     last_error = result.error
@@ -406,6 +431,7 @@ class CodeExecutor:
 
             # Extract return value (look for 'results' variable)
             return_value = exec_locals.get('results', exec_locals.get('result'))
+            data_source = exec_locals.get('_data_source')
 
             return ExecutionResult(
                 success=True,
@@ -413,7 +439,8 @@ class CodeExecutor:
                 stdout=stdout_capture.getvalue(),
                 stderr=stderr_capture.getvalue(),
                 execution_time=execution_time,
-                profile_result=profile_result
+                profile_result=profile_result,
+                data_source=data_source,
             )
 
         except Exception as e:
@@ -812,8 +839,9 @@ Return ONLY the fixed Python code, no explanations. Wrap the code in ```python``
 
     def _fix_key_error(self, code: str, error: str) -> str:
         """Fix KeyError by adding safe dict access."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except KeyError as e:
     print(f"KeyError: {{e}}. Using default value.")
     results = {{'error': 'KeyError', 'details': str(e), 'status': 'failed'}}
@@ -858,8 +886,9 @@ except KeyError as e:
                 return self.COMMON_IMPORTS[name] + '\n' + code
 
         # Generic fix: wrap in try-except
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except NameError as e:
     print(f"NameError: {{e}}. Variable not defined.")
     results = {{'error': 'NameError', 'details': str(e), 'status': 'failed'}}
@@ -867,8 +896,9 @@ except NameError as e:
 
     def _fix_type_error(self, code: str, error: str) -> str:
         """Fix TypeError by adding type checks."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except TypeError as e:
     print(f"TypeError: {{e}}. Type conversion issue.")
     results = {{'error': 'TypeError', 'details': str(e), 'status': 'failed'}}
@@ -876,8 +906,9 @@ except TypeError as e:
 
     def _fix_index_error(self, code: str, error: str) -> str:
         """Fix IndexError by adding bounds checking."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except IndexError as e:
     print(f"IndexError: {{e}}. Index out of bounds.")
     results = {{'error': 'IndexError', 'details': str(e), 'status': 'failed'}}
@@ -885,8 +916,9 @@ except IndexError as e:
 
     def _fix_attribute_error(self, code: str, error: str) -> str:
         """Fix AttributeError by adding attribute check."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except AttributeError as e:
     print(f"AttributeError: {{e}}. Attribute not found.")
     results = {{'error': 'AttributeError', 'details': str(e), 'status': 'failed'}}
@@ -894,8 +926,9 @@ except AttributeError as e:
 
     def _fix_value_error(self, code: str, error: str) -> str:
         """Fix ValueError by adding value validation."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except ValueError as e:
     print(f"ValueError: {{e}}. Invalid value.")
     results = {{'error': 'ValueError', 'details': str(e), 'status': 'failed'}}
@@ -903,8 +936,9 @@ except ValueError as e:
 
     def _fix_zero_division(self, code: str, error: str) -> str:
         """Fix ZeroDivisionError by adding zero checks."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except ZeroDivisionError as e:
     print(f"ZeroDivisionError: {{e}}. Division by zero.")
     results = {{'error': 'ZeroDivisionError', 'details': str(e), 'status': 'failed'}}
@@ -916,8 +950,9 @@ except ZeroDivisionError as e:
         match = regex_module.search(r"No module named '(\w+)'", error)
         module = match.group(1) if match else "unknown"
 
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except (ImportError, ModuleNotFoundError) as e:
     print(f"ImportError: Module '{module}' not available. {{e}}")
     results = {{'error': 'ImportError', 'module': '{module}', 'status': 'failed'}}
@@ -925,8 +960,9 @@ except (ImportError, ModuleNotFoundError) as e:
 
     def _fix_permission_error(self, code: str, error: str) -> str:
         """Fix PermissionError by using alternative path."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except PermissionError as e:
     print(f"PermissionError: {{e}}. Access denied.")
     results = {{'error': 'PermissionError', 'details': str(e), 'status': 'failed'}}
@@ -934,8 +970,9 @@ except PermissionError as e:
 
     def _fix_memory_error(self, code: str, error: str) -> str:
         """Fix MemoryError by suggesting batch processing."""
+        indented = self._indent(code, 4)
         return f"""try:
-{code}
+{indented}
 except MemoryError as e:
     print(f"MemoryError: {{e}}. Consider processing in smaller batches.")
     results = {{'error': 'MemoryError', 'details': 'Out of memory', 'status': 'failed'}}

@@ -1,0 +1,27 @@
+{
+  "test_max_iterations": {
+    "should_stop": true,
+    "reason": "StoppingReason.ITERATION_LIMIT",
+    "details": "Iteration 5/5"
+  },
+  "test_novelty_decline": {
+    "should_stop": true,
+    "reason": "StoppingReason.NO_TESTABLE_HYPOTHESES",
+    "novelty_trend": [
+      0.8,
+      0.6,
+      0.4,
+      0.2,
+      0.1,
+      0.1
+    ],
+    "details": "0 untested hypotheses, 0 queued experiments"
+  },
+  "cost_tracking": {
+    "total_cost": 0.0,
+    "is_always_zero": true,
+    "note": "total_cost is never propagated from LLM calls"
+  },
+  "status": "PASS",
+  "duration_seconds": 0.0
+}

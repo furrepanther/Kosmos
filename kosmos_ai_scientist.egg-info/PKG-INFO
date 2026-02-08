@@ -1,13 +1,13 @@
 Metadata-Version: 2.4
 Name: kosmos-ai-scientist
-Version: 0.1.0
+Version: 0.2.0
 Summary: Fully autonomous AI scientist powered by Claude for hypothesis generation, experimental design, and iterative discovery
 Author: Kosmos Contributors
 License: MIT
-Project-URL: Homepage, https://github.com/your-org/kosmos-ai-scientist
-Project-URL: Documentation, https://github.com/your-org/kosmos-ai-scientist/docs
-Project-URL: Repository, https://github.com/your-org/kosmos-ai-scientist
-Project-URL: Issues, https://github.com/your-org/kosmos-ai-scientist/issues
+Project-URL: Homepage, https://github.com/jimmc414/Kosmos
+Project-URL: Documentation, https://github.com/jimmc414/Kosmos/tree/master/docs
+Project-URL: Repository, https://github.com/jimmc414/Kosmos
+Project-URL: Issues, https://github.com/jimmc414/Kosmos/issues
 Keywords: ai,science,research,autonomous,claude,discovery
 Classifier: Development Status :: 3 - Alpha
 Classifier: Intended Audience :: Science/Research
@@ -19,16 +19,19 @@ Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 Requires-Dist: anthropic>=0.40.0
+Requires-Dist: openai>=1.0.0
 Requires-Dist: pydantic>=2.0.0
 Requires-Dist: pydantic-settings>=2.0.0
 Requires-Dist: python-dotenv>=1.0.0
 Requires-Dist: sqlalchemy>=2.0.0
 Requires-Dist: alembic>=1.13.0
+Requires-Dist: redis>=5.0.0
+Requires-Dist: psutil>=5.9.0
 Requires-Dist: httpx>=0.27.0
 Requires-Dist: tenacity>=8.2.0
-Requires-Dist: numpy>=1.24.0
+Requires-Dist: numpy<2.0.0,>=1.24.0
 Requires-Dist: pandas>=2.0.0
-Requires-Dist: scipy>=1.10.0
+Requires-Dist: scipy<1.14.0,>=1.10.0
 Requires-Dist: scikit-learn>=1.3.0
 Requires-Dist: statsmodels>=0.14.0
 Requires-Dist: matplotlib>=3.7.0
@@ -48,7 +51,12 @@ Requires-Dist: py2neo>=2021.2.3
 Requires-Dist: pykegg>=0.1.0
 Requires-Dist: mygene>=3.2.0
 Requires-Dist: pyensembl>=2.3.0
+Requires-Dist: gseapy>=1.0.0
 Requires-Dist: pydeseq2>=0.4.0
+Requires-Dist: shap>=0.44.0
+Requires-Dist: pwlf>=2.2.0
+Requires-Dist: nbformat>=5.9.0
+Requires-Dist: nbconvert>=7.11.0
 Requires-Dist: pymatgen>=2024.1.0
 Requires-Dist: ase>=3.22.0
 Requires-Dist: mp-api>=0.41.0
@@ -70,380 +78,426 @@ Requires-Dist: black>=23.0.0; extra == "dev"
 Requires-Dist: ruff>=0.1.0; extra == "dev"
 Requires-Dist: mypy>=1.7.0; extra == "dev"
 Requires-Dist: pre-commit>=3.6.0; extra == "dev"
+Provides-Extra: test
+Requires-Dist: pytest>=7.4.0; extra == "test"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "test"
+Requires-Dist: pytest-cov>=4.1.0; extra == "test"
+Requires-Dist: pytest-timeout>=2.2.0; extra == "test"
+Requires-Dist: responses>=0.24.0; extra == "test"
+Requires-Dist: freezegun>=1.4.0; extra == "test"
+Provides-Extra: science
+Requires-Dist: scanpy>=1.9.0; extra == "science"
+Requires-Dist: anndata>=0.9.0; extra == "science"
+Requires-Dist: pyarrow>=14.0.0; extra == "science"
+Provides-Extra: execution
+Requires-Dist: docker>=7.0.0; extra == "execution"
+Provides-Extra: monitoring
+Requires-Dist: prometheus-client>=0.19.0; extra == "monitoring"
+Provides-Extra: all
+Requires-Dist: kosmos-ai-scientist[dev,execution,monitoring,science]; extra == "all"
 Provides-Extra: router
-Requires-Dist: anthropic-router@ git+https://github.com/jimmc414/claude_n_codex_api_proxy.git ; extra == "router"
+Requires-Dist: anthropic-router @ git+https://github.com/jimmc414/claude_n_codex_api_proxy.git ; extra == "router"
 Provides-Extra: domain-extended
 Requires-Dist: nilearn>=0.10.0; extra == "domain-extended"
 Requires-Dist: pybullet>=3.2.0; extra == "domain-extended"
 Requires-Dist: simpy>=4.1.0; extra == "domain-extended"
 Requires-Dist: shap>=0.44.0; extra == "domain-extended"
 
-# Kosmos AI Scientist
+# Kosmos
 
-> **Fully autonomous AI scientist powered by Claude for hypothesis generation, experimental design, and iterative scientific discovery**
+An autonomous AI scientist for scientific discovery, implementing the architecture described in [Lu et al. (2024)](https://arxiv.org/abs/2511.02824).
 
-Kosmos is an open-source implementation of an autonomous AI scientist that can conduct complete research cycles: from literature analysis and hypothesis generation through experimental design, execution, analysis, and iterative refinement.
+[![Version](https://img.shields.io/badge/version-0.2.0--alpha-blue.svg)](https://github.com/jimmc414/Kosmos)
+[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](https://github.com/jimmc414/Kosmos)
+[![Implementation](https://img.shields.io/badge/paper_gaps-17%2F17%20complete-green.svg)](archive/PAPER_IMPLEMENTATION_GAPS.md)
+[![Tests](https://img.shields.io/badge/tests-3704%20passing-green.svg)](archive/120625_code_review.md)
 
-## Features
+## What is Kosmos?
 
-- **Autonomous Research Cycle**: Complete end-to-end scientific workflow
-- **Multi-Domain Support**: Biology, physics, chemistry, neuroscience, materials science
-- **Claude-Powered Intelligence**: Uses Claude Sonnet 4 for hypothesis generation and analysis
-- **Flexible Integration**: Supports both Anthropic API and Claude Code CLI
-- **Proven Analysis Patterns**: Integrates battle-tested statistical methods from kosmos-figures
-- **Literature Integration**: Automated paper search, summarization, and novelty checking
-- **Agent-Based Architecture**: Modular agents for each research task
-- **Safety-First Design**: Sandboxed execution, validation, reproducibility checks
+Kosmos is an open-source implementation of an autonomous AI scientist that can:
+
+- **Generate hypotheses** from literature and data analysis
+- **Design experiments** to test those hypotheses
+- **Execute code** in sandboxed Docker containers
+- **Validate discoveries** using an 8-dimension quality framework
+- **Build knowledge graphs** to track relationships between concepts
+
+The system runs autonomous research cycles, generating tasks, executing analyses, and synthesizing findings into validated discoveries.
 
 ## Quick Start
 
-### Prerequisites
+### Requirements
 
-- Python 3.11 or 3.12
-- One of the following:
-  - **Option A**: Anthropic API key (pay-per-use)
-  - **Option B**: Claude Code CLI installed (Max subscription)
+- Python 3.11+
+- Anthropic API key or OpenAI API key
+- Docker (recommended for code execution)
+
+Without Docker, code runs via `exec()` with static validation. See "Code Execution Security" below.
 
 ### Installation
 
 ```bash
-# Clone the repository
-git clone https://github.com/your-org/kosmos-ai-scientist.git
-cd kosmos-ai-scientist
-
-# Create virtual environment
-python3.11 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+git clone https://github.com/jimmc414/Kosmos.git
+cd Kosmos
 pip install -e .
-
-# For Claude Code CLI support (Option B)
-pip install -e ".[router]"
-```
-
-### Configuration
-
-#### Option A: Using Anthropic API
-
-```bash
-# Copy example config
 cp .env.example .env
-
-# Edit .env and set your API key
-# ANTHROPIC_API_KEY=sk-ant-api03-your-actual-key-here
+# Edit .env and set ANTHROPIC_API_KEY or OPENAI_API_KEY
 ```
 
-Get your API key from [console.anthropic.com](https://console.anthropic.com/)
-
-#### Option B: Using Claude Code CLI (Recommended)
+### Verify Installation
 
 ```bash
-# 1. Install Claude Code CLI
-# Follow instructions at https://claude.ai/download
+# Run smoke tests
+python scripts/smoke_test.py
 
-# 2. Authenticate Claude CLI
-claude auth
-
-# 3. Copy example config
-cp .env.example .env
-
-# 4. Edit .env and set API key to all 9s (triggers CLI routing)
-# ANTHROPIC_API_KEY=999999999999999999999999999999999999999999999999
+# Run unit tests
+pytest tests/unit/ -v --tb=short
 ```
 
-This routes all API calls to your local Claude Code CLI, using your Max subscription with no per-token costs.
-
-### Initialize Database
-
-```bash
-# Run database migrations
-alembic upgrade head
-
-# Verify database created
-ls -la kosmos.db
-```
-
-### Run Your First Research Project
+### Run Research Workflow
 
 ```python
-from kosmos import ResearchDirector
+import asyncio
+from kosmos.workflow.research_loop import ResearchWorkflow
 
-# Initialize the research director
-director = ResearchDirector()
+async def run():
+    workflow = ResearchWorkflow(
+        research_objective="Your research question here",
+        artifacts_dir="./artifacts"
+    )
+    result = await workflow.run(num_cycles=5, tasks_per_cycle=10)
+    report = await workflow.generate_report()
+    print(report)
 
-# Pose a research question
-question = "What is the relationship between sleep deprivation and memory consolidation?"
-
-# Run autonomous research
-results = director.conduct_research(
-    question=question,
-    domain="neuroscience",
-    max_iterations=5
-)
-
-# View results
-print(results.summary)
-print(results.key_findings)
+asyncio.run(run())
 ```
+
+### CLI Usage
+
+```bash
+# Run research with default settings
+kosmos run "What metabolic pathways differ between cancer and normal cells?" --domain biology
+
+# With budget limit
+kosmos run "How do perovskites optimize efficiency?" --domain materials --budget 50
+
+# Interactive mode (recommended for first time)
+kosmos run --interactive
+
+# Maximum verbosity
+kosmos run "Your question" --domain biology --trace
+
+# Real-time streaming display
+kosmos run "Your question" --stream
+
+# Streaming with token display disabled
+kosmos run "Your question" --stream --no-stream-tokens
+
+# Show system information
+kosmos info
+
+# Run diagnostics
+kosmos doctor
+```
+
+## Features
+
+### Core Capabilities
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Research Loop | Multi-cycle autonomous research with hypothesis generation | Complete |
+| Literature Search | ArXiv, PubMed, Semantic Scholar integration | Complete |
+| Code Execution | Docker-sandboxed Jupyter notebooks | Complete |
+| Knowledge Graph | Neo4j-based relationship storage (optional) | Complete |
+| Context Compression | Query-based hierarchical compression (20:1 ratio) | Complete |
+| Discovery Validation | 8-dimension ScholarEval quality framework | Complete |
+| Multi-Provider LLM | Anthropic, OpenAI, LiteLLM (100+ providers) | Complete |
+| Budget Enforcement | Cost tracking with configurable limits and enforcement | Complete |
+| Error Recovery | Exponential backoff with circuit breaker | Complete |
+| Debug Mode | 4-level verbosity with stage tracking | Complete |
+| Real-time Streaming | SSE/WebSocket events, CLI --stream flag | Complete |
+
+### Code Execution Security
+
+AI-generated code runs in isolated Docker containers:
+
+| Layer | Implementation |
+|-------|---------------|
+| Container Isolation | `--cap-drop=ALL`, no privileged access |
+| Network | Disabled (`--network=none`) |
+| Filesystem | Read-only root, tmpfs for scratch |
+| Resources | CPU: 2 cores, Memory: 2GB, Timeout: 300s |
+| Pooling | Pre-warmed containers reduce cold start |
+
+See: `kosmos/execution/sandbox.py`, `docker_manager.py`
+
+Without Docker, falls back to `CodeValidator` static analysis + `exec()`. Not recommended for untrusted inputs.
+
+### Agent Architecture
+
+| Agent | Role |
+|-------|------|
+| Research Director | Master orchestrator coordinating all agents |
+| Hypothesis Generator | Generates testable hypotheses from literature |
+| Experiment Designer | Creates experimental protocols |
+| Data Analyst | Analyzes results and interprets findings |
+| Literature Analyzer | Searches and synthesizes papers |
+| Plan Creator/Reviewer | Strategic task generation with 70/30 exploration/exploitation |
+
+### How Context Compression Works
+
+The system processes literature in batches, not bulk:
+
+1. **Relevance Sorting**: Papers ranked by query relevance before processing
+2. **Batch Size**: Top 10 papers per batch
+3. **Statistics Extraction**: Regex-based extraction of p-values, sample sizes, effect sizes
+4. **Tiered Summarization**:
+   - Task: 42K lines code to 2-line summary + extracted stats
+   - Cycle: 10 task summaries to cycle overview
+   - Synthesis: 20 cycles to final narrative
+   - Detail: Full content lazy-loaded when needed
+
+Effective ratio: ~20:1. See `kosmos/compression/compressor.py`.
+
+## Configuration
+
+All configuration via environment variables. See `.env.example` for the full list.
+
+### LLM Provider
+
+```bash
+# Anthropic (default)
+LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
+
+# OpenAI
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# LiteLLM (supports 100+ providers including local models)
+LLM_PROVIDER=litellm
+LITELLM_MODEL=ollama/llama3.1:8b
+LITELLM_API_BASE=http://localhost:11434
+```
+
+### Budget Control
+
+```bash
+BUDGET_ENABLED=true
+BUDGET_LIMIT_USD=10.00
+```
+
+Budget enforcement raises `BudgetExceededError` when the limit is reached, gracefully transitioning the research to completion.
+
+### Concurrency
+
+Three independent limits in `kosmos/config.py`:
+
+| Setting | Default | Range |
+|---------|---------|-------|
+| `max_parallel_hypotheses` | 3 | 1-10 |
+| `max_concurrent_experiments` | 10 | 1-16 |
+| `max_concurrent_llm_calls` | 5 | 1-20 |
+
+The paper describes 10 parallel tasks. Default now matches paper specification.
+
+### Optional Services
+
+```bash
+# Neo4j (optional, for knowledge graph features)
+NEO4J_URI=bolt://localhost:7687
+NEO4J_PASSWORD=your-password
+
+# Redis (optional, for distributed caching)
+REDIS_URL=redis://localhost:6379
+```
+
+#### Docker Setup for Optional Services
+
+Start Neo4j, Redis, and PostgreSQL with Docker Compose:
+
+```bash
+# Start all optional services (Neo4j, Redis, PostgreSQL)
+docker compose --profile dev up -d
+
+# Or start individual services
+docker compose up -d neo4j
+docker compose up -d redis
+docker compose up -d postgres
+
+# Stop services
+docker compose --profile dev down
+```
+
+Service URLs when running via Docker:
+- Neo4j Browser: http://localhost:7474 (user: neo4j, password: kosmos-password)
+- PostgreSQL: localhost:5432 (user: kosmos, password: kosmos-dev-password)
+- Redis: localhost:6379
+
+#### Semantic Scholar API
+
+Literature search via Semantic Scholar works without authentication. An API key is optional but increases rate limits:
+
+```bash
+# Optional: Get API key from https://www.semanticscholar.org/product/api
+SEMANTIC_SCHOLAR_API_KEY=your-key-here
+```
+
+### Debug Mode
+
+```bash
+# Enable debug mode with level 1-3
+DEBUG_MODE=true
+DEBUG_LEVEL=2
+
+# Or use CLI flag for maximum verbosity
+kosmos run "Your research question" --trace
+```
+
+See [docs/DEBUG_MODE.md](docs/DEBUG_MODE.md) for comprehensive debug documentation.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     Research Director                        │
-│          (Orchestrates autonomous research cycle)            │
-└──────────────┬──────────────────────────────────────────────┘
-               │
-    ┌──────────┴──────────┬───────────────┬──────────────┐
-    │                     │               │              │
-┌───▼────┐    ┌──────────▼──────────┐   ┌▼──────────┐ ┌▼─────────────┐
-│Literature│   │Hypothesis Generator│   │Experiment │ │Data Analyst  │
-│Analyzer  │   │    (Claude)         │   │Designer   │ │  (Claude)    │
-└───┬────┘    └──────────┬──────────┘   └┬──────────┘ └┬─────────────┘
-    │                     │               │              │
-    └─────────────────────┴───────────────┴──────────────┘
-                          │
-                ┌─────────▼──────────┐
-                │  Execution Engine  │
-                │ (kosmos-figures    │
-                │  proven patterns)  │
-                └────────────────────┘
-```
-
-### Core Components
-
-- **Research Director**: Master orchestrator managing research workflow
-- **Literature Analyzer**: Searches and analyzes scientific papers (arXiv, Semantic Scholar, PubMed)
-- **Hypothesis Generator**: Uses Claude to generate testable hypotheses
-- **Experiment Designer**: Designs computational experiments
-- **Execution Engine**: Runs experiments using proven statistical methods
-- **Data Analyst**: Interprets results using Claude
-- **Feedback Loop**: Iteratively refines hypotheses based on results
-
-## Usage Modes
-
-### Mode 1: Claude Code CLI (Max Subscription)
-
-**Pros:**
-- No per-token costs
-- Unlimited usage
-- Latest Claude model
-- Local execution
-
-**Cons:**
-- Requires Claude CLI installation
-- Requires Max subscription
-
-**Setup:**
-```bash
-pip install -e ".[router]"
-# Set ANTHROPIC_API_KEY=999999999999999999999999999999999999999999999999
-```
-
-### Mode 2: Anthropic API
-
-**Pros:**
-- Pay-as-you-go
-- No CLI installation needed
-- Works anywhere
-
-**Cons:**
-- Per-token costs
-- Rate limits apply
-
-**Setup:**
-```bash
-# Set ANTHROPIC_API_KEY=sk-ant-api03-your-key-here
-```
-
-## Configuration
-
-All configuration is via environment variables (see `.env.example`):
-
-### Core Settings
-- `ANTHROPIC_API_KEY`: API key or `999...` for CLI mode
-- `CLAUDE_MODEL`: Model to use (API mode only)
-- `DATABASE_URL`: Database connection string
-- `LOG_LEVEL`: Logging verbosity
-
-### Research Settings
-- `MAX_RESEARCH_ITERATIONS`: Max autonomous iterations
-- `ENABLED_DOMAINS`: Which scientific domains to support
-- `ENABLED_EXPERIMENT_TYPES`: Types of experiments allowed
-- `MIN_NOVELTY_SCORE`: Minimum novelty threshold
-
-### Safety Settings
-- `ENABLE_SAFETY_CHECKS`: Code safety validation
-- `MAX_EXPERIMENT_EXECUTION_TIME`: Timeout for experiments
-- `ENABLE_SANDBOXING`: Sandbox code execution
-- `REQUIRE_HUMAN_APPROVAL`: Manual approval gates
-
-## Development
-
-### Running Tests
-
-```bash
-# Install dev dependencies
-pip install -e ".[dev]"
-
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=kosmos --cov-report=html
-
-# Run specific test suite
-pytest tests/unit/
-pytest tests/integration/
-pytest tests/e2e/
-```
-
-### Code Quality
-
-```bash
-# Format code
-black kosmos/ tests/
-
-# Lint
-ruff check kosmos/ tests/
-
-# Type check
-mypy kosmos/
-```
-
-### Project Structure
-
-```
 kosmos/
-├── core/           # Core infrastructure (LLM, config, logging)
-├── agents/         # Agent implementations
-├── db/             # Database models and operations
-├── execution/      # Experiment execution engine
-├── analysis/       # Result analysis and visualization
-├── hypothesis/     # Hypothesis generation and management
-├── experiments/    # Experiment templates
-├── literature/     # Literature search and analysis
-├── knowledge/      # Knowledge graph and semantic search
-├── domains/        # Domain-specific tools (biology, physics, etc.)
-├── safety/         # Safety checks and validation
-└── cli/            # Command-line interface
-
-tests/
-├── unit/           # Unit tests
-├── integration/    # Integration tests
-└── e2e/            # End-to-end tests
-
-docs/
-├── kosmos-figures-analysis.md  # Analysis patterns from kosmos-figures
-├── integration-plan.md         # Integration strategy
-└── domain-roadmaps/            # Domain-specific guides
+├── agents/           # Research agents (director, hypothesis, experiment, etc.)
+├── compression/      # Context compression (20:1 ratio)
+├── core/             # LLM providers, metrics, configuration
+│   └── providers/    # Anthropic, OpenAI, LiteLLM with async support
+├── execution/        # Docker-based sandboxed code execution
+├── knowledge/        # Neo4j knowledge graph (1,025 lines)
+├── literature/       # ArXiv, PubMed, Semantic Scholar clients
+├── orchestration/    # Plan creation/review, task delegation
+├── validation/       # ScholarEval 8-dimension quality framework
+├── workflow/         # Main research loop integration
+└── world_model/      # State management, JSON artifacts
 ```
+
+## Project Status
+
+### Implementation Completeness
+
+| Category | Percentage | Description |
+|----------|------------|-------------|
+| Paper gaps | 100% | All 17 paper implementation gaps complete |
+| Ready for user testing | 95% | Core research loop, agents, LLM providers, validation |
+| Deferred | 5% | Phase 4 production mode (polyglot persistence) |
+
+### Fixed Issues (Recent)
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| [#66](https://github.com/jimmc414/Kosmos/issues/66) | CLI deadlock - async refactor | ✅ Fixed |
+| [#67](https://github.com/jimmc414/Kosmos/issues/67) | SkillLoader domain mapping | ✅ Fixed |
+| [#68](https://github.com/jimmc414/Kosmos/issues/68) | Pydantic V2 migration | ✅ Fixed |
+| [#54-#58](https://github.com/jimmc414/Kosmos/issues/54) | Critical paper gaps | ✅ Fixed |
+| [#59](https://github.com/jimmc414/Kosmos/issues/59) | h5ad/Parquet data formats | ✅ Fixed |
+| [#69](https://github.com/jimmc414/Kosmos/issues/69) | R language execution | ✅ Fixed |
+| [#60](https://github.com/jimmc414/Kosmos/issues/60) | Figure generation | ✅ Fixed |
+| [#61](https://github.com/jimmc414/Kosmos/issues/61) | Jupyter notebook generation | ✅ Fixed |
+| [#70](https://github.com/jimmc414/Kosmos/issues/70) | Null model statistical validation | ✅ Fixed |
+| [#63](https://github.com/jimmc414/Kosmos/issues/63) | Failure mode detection | ✅ Fixed |
+| [#62](https://github.com/jimmc414/Kosmos/issues/62) | Code line provenance | ✅ Fixed |
+| [#64](https://github.com/jimmc414/Kosmos/issues/64) | Multi-run convergence framework | ✅ Fixed |
+| [#65](https://github.com/jimmc414/Kosmos/issues/65) | Paper accuracy validation | ✅ Fixed |
+| [#72](https://github.com/jimmc414/Kosmos/issues/72) | Real-time streaming API | ✅ Fixed |
+
+### Implementation Complete
+
+All 17 paper implementation gaps have been addressed. Full tracking: [PAPER_IMPLEMENTATION_GAPS.md](archive/PAPER_IMPLEMENTATION_GAPS.md)
+
+### Test Coverage
+
+| Category | Count | Status |
+|----------|-------|--------|
+| Unit tests | 2251 | Passing |
+| Integration tests | 415 | Passing |
+| E2E tests | 121 | Most pass, some skip (environment-dependent) |
+| Requirements tests | 815 | Passing |
+
+E2E tests skip based on environment:
+- Neo4j not configured (`@pytest.mark.requires_neo4j`)
+- Docker not running (sandbox execution tests)
+- API keys not set (tests requiring live LLM calls)
+
+### Paper Implementation
+
+This project implements the architecture from the Kosmos paper but **has not yet reproduced** the paper's claimed results:
+
+| Paper Claim | Implementation Status |
+|-------------|----------------------|
+| 79.4% accuracy on scientific statements | Architecture implemented, not validated |
+| 7 validated discoveries | Not reproduced |
+| 1,500 papers per run | Architecture supports this |
+| 42,000 lines of code per run | Architecture supports this |
+| 200 agent rollouts | Configurable via `max_iterations` |
+
+The system is suitable for experimentation and further development. Before production research use, validation studies should be conducted.
+
+## Limitations
+
+1. **Docker recommended**: Without Docker, code execution falls back to direct `exec()` which is unsafe for untrusted code.
+
+2. **Neo4j optional**: Knowledge graph features require Neo4j. Set `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` to enable.
+
+3. **R support via Docker**: R language execution requires the R-enabled Docker image (`docker/sandbox/Dockerfile.r`) with TwoSampleMR, susieR, and MendelianRandomization packages.
+
+4. **Single-user**: No multi-tenancy or user isolation.
+
+5. **Not a reproduction study**: We have not yet reproduced the paper's 79.4% accuracy or 7 validated discoveries.
 
 ## Documentation
 
-- [Architecture Overview](docs/architecture.md) - System design and components
-- [Integration Plan](docs/integration-plan.md) - How we integrate kosmos-figures patterns
-- [Domain Roadmaps](docs/domain-roadmaps/) - Domain-specific implementation guides
-- [API Reference](docs/api/) - API documentation
-- [Contributing Guide](CONTRIBUTING.md) - How to contribute
+### Current Status
+- [archive/PAPER_IMPLEMENTATION_GAPS.md](archive/PAPER_IMPLEMENTATION_GAPS.md) - Paper implementation gaps (17/17 complete)
+- [docs/DEBUG_MODE.md](docs/DEBUG_MODE.md) - Debug mode guide
 
-## Roadmap
+### Archived Analysis
+- [archive/120525_implementation_gaps_v2.md](archive/120525_implementation_gaps_v2.md) - Original implementation gaps analysis
+- [archive/120625_code_review.md](archive/120625_code_review.md) - Code review (Dec 2025)
 
-### Phase 1: Core Infrastructure (Current)
-- [x] Project structure
-- [x] Claude integration (API + CLI)
-- [ ] Configuration system
-- [ ] Agent framework
-- [ ] Database setup
+### Operations
+- [archive/GETTING_STARTED.md](archive/GETTING_STARTED.md) - Detailed usage examples
+- [CONTRIBUTING.md](archive/CONTRIBUTING.md) - Development guidelines (archived)
+- [CHANGELOG.md](CHANGELOG.md) - Version history
 
-### Phase 2: Knowledge & Literature
-- [ ] Literature APIs (arXiv, Semantic Scholar, PubMed)
-- [ ] Literature analyzer agent
-- [ ] Vector database for semantic search
-- [ ] Knowledge graph
+## Paper Gap Solutions
 
-### Phase 3: Hypothesis Generation
-- [ ] Hypothesis generator agent
-- [ ] Novelty checking
-- [ ] Hypothesis prioritization
+The original paper omitted implementation details for 6 critical components. This repository provides those implementations:
 
-### Phase 4: Experimental Design
-- [ ] Experiment designer agent
-- [ ] Protocol templates
-- [ ] Resource estimation
+| Gap | Problem | Solution |
+|-----|---------|----------|
+| 0 | Context compression for 1,500 papers | Hierarchical 3-tier compression (20:1 ratio) |
+| 1 | State Manager schema unspecified | 4-layer hybrid architecture (JSON + Neo4j + Vector + Citations) |
+| 2 | Task generation algorithm unstated | Plan Creator + Plan Reviewer pattern |
+| 3 | Agent integration mechanism unclear | Skill loader with 116 domain-specific skills (see [#67](https://github.com/jimmc414/Kosmos/issues/67)) |
+| 4 | Execution environment not described | Docker sandbox with Python + R support (see [#69](https://github.com/jimmc414/Kosmos/issues/69)) |
+| 5 | Discovery validation criteria missing | ScholarEval 8-dimension quality framework |
 
-### Phase 5: Execution
-- [ ] Sandboxed execution environment
-- [ ] Integration of kosmos-figures patterns
-- [ ] Statistical analysis
-
-### Phase 6: Analysis & Interpretation
-- [ ] Data analyst agent
-- [ ] Visualization generation
-- [ ] Result summarization
-
-### Phase 7: Iterative Learning
-- [ ] Research director agent
-- [ ] Feedback loops
-- [ ] Convergence detection
-
-### Phases 8-10: Safety, Multi-Domain, Production
-- [ ] Safety validation
-- [ ] Domain-specific tools
-- [ ] Production deployment
+For detailed analysis, see [archive/120525_implementation_gaps_v2.md](archive/120525_implementation_gaps_v2.md).
 
 ## Based On
 
-This project is inspired by:
-- **Paper**: [Kosmos: An AI Scientist for Autonomous Discovery](https://arxiv.org/pdf/2511.02824) (Nov 2025)
-- **Analysis Patterns**: [kosmos-figures repository](https://github.com/EdisonScientific/kosmos-figures)
-- **Claude Router**: [claude_n_codex_api_proxy](https://github.com/jimmc414/claude_n_codex_api_proxy)
+- **Paper**: [Kosmos: An AI Scientist for Autonomous Discovery](https://arxiv.org/abs/2511.02824) (Lu et al., 2024)
+- **K-Dense ecosystem**: Pattern repositories for AI agent systems
+- **kosmos-figures**: [Analysis patterns](https://github.com/EdisonScientific/kosmos-figures)
 
 ## Contributing
 
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+See [CONTRIBUTING.md](archive/CONTRIBUTING.md).
 
-### Areas We Need Help
-
-- Domain-specific tools and APIs
-- Experiment templates for different domains
-- Literature API integrations
-- Safety validation
-- Documentation
-- Testing
+Areas where contributions would be useful:
+- Docker sandbox testing and hardening
+- Additional scientific domain skills
+- Performance benchmarking with production LLMs
+- Validation studies to measure actual accuracy
+- Multi-tenancy and user isolation
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Citation
-
-If you use Kosmos in your research, please cite:
-
-```bibtex
-@software{kosmos_ai_scientist,
-  title={Kosmos AI Scientist: Autonomous Scientific Discovery with Claude},
-  author={Kosmos Contributors},
-  year={2025},
-  url={https://github.com/your-org/kosmos-ai-scientist}
-}
-```
-
-## Acknowledgments
-
-- **Anthropic** for Claude and Claude Code
-- **Edison Scientific** for kosmos-figures analysis patterns
-- **Open science community** for literature APIs and tools
-
-## Support
-
-- **Issues**: [GitHub Issues](https://github.com/your-org/kosmos-ai-scientist/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/kosmos-ai-scientist/discussions)
-- **Discord**: [Join our community](https://discord.gg/your-invite)
+MIT License
 
 ---
 
-**Status**: Alpha - Under active development (Phase 1)
-
-**Last Updated**: 2025-11-07
+**Version**: 0.2.0-alpha | **Tests**: 3704 passing | **Last Updated**: 2025-12-09

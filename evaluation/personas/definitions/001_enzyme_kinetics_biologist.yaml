@@ -1,0 +1,46 @@
+persona:
+  id: "001"
+  name: "Dr. Sarah Chen"
+  role: "Computational Biologist"
+  expertise_level: "mildly_technical"  # non_technical | mildly_technical | expert
+  background: >
+    Computational biologist with Python skills. Can wrangle data in pandas,
+    run statistical tests, set up conda environments. Not an ML specialist.
+
+research:
+  question: "How does temperature affect enzyme catalytic rates?"
+  domain: "biology"
+  dataset: "data/enzyme_kinetics_test.csv"
+  max_iterations: 3
+  budget_usd: 1.00
+  expected_discoveries:
+    - "Temperature optimum at ~37C"
+    - "Thermal denaturation above 42C"
+    - "pH dependency on enzyme activity"
+
+setup:
+  model: "deepseek/deepseek-chat"
+  provider: "litellm"
+  database: "sqlite"
+  neo4j: false
+  docker: false
+
+expectations:
+  hypothesis_quality_minimum: 5     # out of 10
+  hypotheses_tested_minimum: 2      # out of generated
+  code_should_match_domain: true    # not a wrong-template fallback
+  analysis_should_interpret: true   # not "manual review recommended"
+  paper_claims_pass_minimum: 10     # out of 15
+
+narrative:
+  voice: "first_person"
+  tone: "honest, specific, grounded in data"
+  comparison_framing: "What would a better model change?"
+  sections:
+    - "motivation_and_setup"
+    - "getting_it_running"
+    - "what_it_produced"
+    - "what_worked"
+    - "what_didnt"
+    - "model_vs_architecture"
+    - "verdict"

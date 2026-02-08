@@ -1,0 +1,23 @@
+{
+  "code_generated": true,
+  "code_length": 2078,
+  "code_preview": "# T-Test Comparison Analysis\n# Generated from protocol template\n\nimport pandas as pd\nimport numpy as np\nfrom scipy import stats\nfrom pathlib import Path\nfrom kosmos.execution.data_analysis import DataAnalyzer\n\n# Data loading with synthetic fallback (Issue #51 fix)\n# Expected format: CSV with columns 'temperature' and 'enzyme_activity'\nif 'data_path' in dir() and data_path and Path(data_path).exists():\n    df = pd.read_csv(data_path)\n    _data_source = 'file'\nelse:\n    # Generate synthetic data f",
+  "has_data_source_flag": true,
+  "uses_synthetic_data": true,
+  "hardcoded_effect_size": true,
+  "execution": {
+    "success": false,
+    "stdout": "T-statistic: {result['t_statistic']:.4f}\nP-value: {result['p_value']:.6f}\nSignificance: {result['significance_label']}\nMean difference: {result['mean_difference']:.4f}\n",
+    "stderr": "\nTraceback (most recent call last):\n  File \"/mnt/c/python/Kosmos/kosmos/execution/executor.py\", line 398, in _execute_once\n    exec(code, exec_globals, exec_locals)\n  File \"<string>\", line 50, in <module>\n  File \"<string>\", line 50, in <dictcomp>\nNameError: name 'df' is not defined\n",
+    "error": "name 'df' is not defined",
+    "return_value": "None"
+  },
+  "gap_notes": [
+    "Synthetic data flag in code: True",
+    "Uses synthetic data: True",
+    "Hardcoded effect_size=0.5: True",
+    "Direct exec() used (no Docker sandbox by default)"
+  ],
+  "status": "PASS",
+  "duration_seconds": 1.27
+}

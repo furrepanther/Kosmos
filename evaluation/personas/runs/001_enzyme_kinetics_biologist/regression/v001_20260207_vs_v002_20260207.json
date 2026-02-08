@@ -1,0 +1,157 @@
+{
+  "persona": "001_enzyme_kinetics_biologist",
+  "baseline": "v001_20260207",
+  "current": "v002_20260207",
+  "baseline_timestamp": "2026-02-07T17:39:38",
+  "current_timestamp": "2026-02-07T21:41:11.412672",
+  "summary": {
+    "checks_passed": {
+      "v1": 36,
+      "v2": 37,
+      "delta": "+1"
+    },
+    "checks_total": {
+      "v1": 37,
+      "v2": 37,
+      "delta": "0"
+    },
+    "quality_score": {
+      "v1": 4.67,
+      "v2": 4.71,
+      "delta": "+0.040000000000000036"
+    },
+    "rigor_score": {
+      "v1": 7.88,
+      "v2": 7.88,
+      "delta": "0"
+    },
+    "paper_claims_pass": {
+      "v1": 6,
+      "v2": 6,
+      "delta": "0"
+    }
+  },
+  "check_changes": {
+    "improved": [
+      "refinement_attempted"
+    ],
+    "regressed": [],
+    "unchanged": [
+      "assumption_checking",
+      "average_quality",
+      "claims_evaluated",
+      "config_loads",
+      "convergence_criteria",
+      "convergence_not_premature",
+      "cost_tracking",
+      "data_provider_loads_csv",
+      "database_initialized",
+      "dataset_exists",
+      "dataset_readable",
+      "director_accepts_data_path",
+      "director_created",
+      "effect_size_randomization",
+      "experiments_executed",
+      "hypotheses_generated",
+      "litellm_model_configured",
+      "llm_client_created",
+      "llm_generates_response",
+      "loop_completed",
+      "majority_pass_or_partial",
+      "multi_format_loading",
+      "multi_format_support",
+      "no_attribute_errors",
+      "novelty_checking",
+      "power_analysis",
+      "quality_assessed",
+      "reproducibility",
+      "research_plan_generated",
+      "response_contains_works",
+      "response_json_parse_works",
+      "response_lower_works",
+      "response_strip_works",
+      "workflow_advanced",
+      "workflow_started"
+    ]
+  },
+  "quality_changes": {
+    "phase2_code_execution": {
+      "v1": 6,
+      "v2": 6,
+      "delta": "0"
+    },
+    "phase2_experiment_design": {
+      "v1": 5,
+      "v2": 5,
+      "delta": "0"
+    },
+    "phase2_hypothesis_quality": {
+      "v1": 3,
+      "v2": 3,
+      "delta": "0"
+    },
+    "phase3_analysis": {
+      "v1": null,
+      "v2": 5,
+      "delta": "N/A"
+    },
+    "phase3_code_execution": {
+      "v1": 6,
+      "v2": 6,
+      "delta": "0"
+    },
+    "phase3_experiment_design": {
+      "v1": 5,
+      "v2": 5,
+      "delta": "0"
+    },
+    "phase3_hypothesis_quality": {
+      "v1": 3,
+      "v2": 3,
+      "delta": "0"
+    }
+  },
+  "rigor_changes": {
+    "assumption_checking": {
+      "v1": 8,
+      "v2": 8,
+      "delta": "0"
+    },
+    "convergence_criteria": {
+      "v1": 8,
+      "v2": 8,
+      "delta": "0"
+    },
+    "cost_tracking": {
+      "v1": 7,
+      "v2": 7,
+      "delta": "0"
+    },
+    "effect_size_randomization": {
+      "v1": 7,
+      "v2": 7,
+      "delta": "0"
+    },
+    "multi_format_loading": {
+      "v1": 10,
+      "v2": 10,
+      "delta": "0"
+    },
+    "novelty_checking": {
+      "v1": 8,
+      "v2": 8,
+      "delta": "0"
+    },
+    "power_analysis": {
+      "v1": 8,
+      "v2": 8,
+      "delta": "0"
+    },
+    "reproducibility": {
+      "v1": 7,
+      "v2": 7,
+      "delta": "0"
+    }
+  },
+  "paper_claim_changes": {}
+}

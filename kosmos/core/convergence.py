@@ -196,7 +196,11 @@ class ConvergenceDetector:
         # Configuration
         self.config = config or {}
         self.novelty_decline_threshold = self.config.get("novelty_decline_threshold", 0.3)
-        self.novelty_decline_window = self.config.get("novelty_decline_window", 5)
+        max_iters = self.config.get("max_iterations", 10)
+        self.novelty_decline_window = self.config.get(
+            "novelty_decline_window",
+            min(5, max(2, max_iters - 1))
+        )
         self.cost_per_discovery_threshold = self.config.get("cost_per_discovery_threshold", 1000.0)
 
         # Metrics tracking
@@ -235,18 +239,28 @@ class ConvergenceDetector:
         # Update metrics
         self._update_metrics(research_plan, hypotheses, results, total_cost=total_cost)
 
-        # Check mandatory criteria first
+        # Check hard-stop mandatory criteria first (e.g., no_testable_hypotheses)
         for criterion in self.mandatory_criteria:
+            if criterion == "iteration_limit":
+                continue  # Check after optional criteria
             decision = self._check_criterion(criterion, research_plan, hypotheses, results, mandatory=True)
             if decision.should_stop:
                 logger.info(f"Mandatory stopping criterion met: {criterion}")
                 return decision
 
-        # Check optional criteria
+        # Check optional (scientific) criteria before iteration_limit
+        # so scientific convergence reasons are reported when both would fire
         for criterion in self.optional_criteria:
             decision = self._check_criterion(criterion, research_plan, hypotheses, results, mandatory=False)
             if decision.should_stop:
                 logger.info(f"Optional stopping criterion met: {criterion}")
+                return decision
+
+        # Check iteration_limit last among mandatory criteria
+        if "iteration_limit" in self.mandatory_criteria:
+            decision = self._check_criterion("iteration_limit", research_plan, hypotheses, results, mandatory=True)
+            if decision.should_stop:
+                logger.info("Mandatory stopping criterion met: iteration_limit")
                 return decision
 
         # No stopping criteria met

@@ -1,0 +1,63 @@
+{
+  "phase": "Phase 1: Smoke Test",
+  "timestamp": "2026-02-06T21:33:00Z",
+  "duration_seconds": 300,
+  "results": {
+    "environment_verification": {
+      "status": "PASS",
+      "kosmos_version": "0.2.0",
+      "python_version": "3.11",
+      "kosmos_doctor": "All 13 checks passed",
+      "packages": ["anthropic", "typer", "rich", "pydantic", "sqlalchemy", "numpy", "pandas", "scipy"]
+    },
+    "config_analysis": {
+      "status": "WARNING",
+      "finding": "LITELLM_MODEL env var (deepseek/deepseek-chat) NOT picked up by config; defaults to gpt-3.5-turbo",
+      "llm_provider": "litellm",
+      "actual_model_used": "gpt-3.5-turbo-0125",
+      "configured_model_env": "deepseek/deepseek-chat",
+      "config_default_model": "gpt-3.5-turbo",
+      "budget_usd": 10.0,
+      "max_iterations": 10,
+      "enabled_domains": ["biology", "physics", "chemistry", "neuroscience"],
+      "world_model_enabled": true,
+      "world_model_mode": "simple",
+      "parallel_experiments": 0,
+      "redis_enabled": false,
+      "neo4j_configured": true,
+      "neo4j_fallback": "Expected - falls back to in-memory"
+    },
+    "llm_connectivity": {
+      "status": "PASS",
+      "model_responded": "gpt-3.5-turbo-0125",
+      "response": "Hello",
+      "tokens": {"input": 12, "output": 1, "total": 13},
+      "cost_usd": 0.0000075,
+      "note": "Using OpenAI gpt-3.5-turbo instead of DeepSeek - config env var loading issue"
+    },
+    "existing_tests": {
+      "smoke_tests": {"passed": 6, "failed": 0, "status": "PASS"},
+      "unit_tests": {
+        "passed": 45,
+        "failed": 1,
+        "status": "PARTIAL PASS",
+        "failure": "test_summarize_paper - Anthropic API auth error (expected, using LiteLLM/OpenAI not Anthropic)",
+        "pass_rate": "97.8%"
+      },
+      "coverage": "20.12%"
+    }
+  },
+  "pass_criteria": {
+    "cli_responds": true,
+    "llm_returns_response": true,
+    "unit_tests_gt_80_percent": true,
+    "overall": "PASS (with config warning)"
+  },
+  "key_findings": [
+    "Config env var LITELLM_MODEL not loaded - kosmos uses gpt-3.5-turbo despite deepseek/deepseek-chat in .env",
+    "The config.py has alias='LITELLM_MODEL' at line 158 but pydantic alias resolution may not work with nested models",
+    "All infrastructure checks pass (DB, cache, packages)",
+    "97.8% unit test pass rate (1 failure due to Anthropic API key, not a real bug)",
+    "World model enabled in 'simple' mode (not full Neo4j)"
+  ]
+}

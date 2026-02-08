@@ -59,6 +59,9 @@ class LLMResponse:
     """
     Unified response format from all providers.
 
+    Supports string-like operations (strip, lower, etc.) by delegating to
+    self.content, so callers that expect str from generate() work seamlessly.
+
     Attributes:
         content: The generated text content
         usage: Token usage statistics
@@ -73,6 +76,81 @@ class LLMResponse:
     finish_reason: Optional[str] = None
     raw_response: Optional[Any] = None
     metadata: Optional[Dict[str, Any]] = None
+
+    # -- String compatibility methods --
+    # These allow LLMResponse to be used where str is expected (e.g. response.strip())
+
+    def __str__(self) -> str:
+        return self.content
+
+    def __contains__(self, item: str) -> bool:
+        return item in self.content
+
+    def __len__(self) -> int:
+        return len(self.content)
+
+    def __add__(self, other: str) -> str:
+        return self.content + other
+
+    def __radd__(self, other: str) -> str:
+        return other + self.content
+
+    def __bool__(self) -> bool:
+        return bool(self.content)
+
+    def __iter__(self):
+        return iter(self.content)
+
+    def __getitem__(self, key):
+        return self.content[key]
+
+    def strip(self, chars: Optional[str] = None) -> str:
+        return self.content.strip(chars) if chars else self.content.strip()
+
+    def lstrip(self, chars: Optional[str] = None) -> str:
+        return self.content.lstrip(chars) if chars else self.content.lstrip()
+
+    def rstrip(self, chars: Optional[str] = None) -> str:
+        return self.content.rstrip(chars) if chars else self.content.rstrip()
+
+    def lower(self) -> str:
+        return self.content.lower()
+
+    def upper(self) -> str:
+        return self.content.upper()
+
+    def startswith(self, prefix, *args) -> bool:
+        return self.content.startswith(prefix, *args)
+
+    def endswith(self, suffix, *args) -> bool:
+        return self.content.endswith(suffix, *args)
+
+    def split(self, *args, **kwargs):
+        return self.content.split(*args, **kwargs)
+
+    def rsplit(self, *args, **kwargs):
+        return self.content.rsplit(*args, **kwargs)
+
+    def replace(self, old: str, new: str, count: int = -1) -> str:
+        return self.content.replace(old, new, count)
+
+    def find(self, sub: str, *args) -> int:
+        return self.content.find(sub, *args)
+
+    def rfind(self, sub: str, *args) -> int:
+        return self.content.rfind(sub, *args)
+
+    def count(self, sub: str, *args) -> int:
+        return self.content.count(sub, *args)
+
+    def encode(self, *args, **kwargs) -> bytes:
+        return self.content.encode(*args, **kwargs)
+
+    def format(self, *args, **kwargs) -> str:
+        return self.content.format(*args, **kwargs)
+
+    def join(self, iterable) -> str:
+        return self.content.join(iterable)
 
 
 class LLMProvider(ABC):

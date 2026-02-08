@@ -478,6 +478,8 @@ Respond with JSON array:
                         }]
                     )
 
+                    if not variant.id:
+                        variant.id = f"hyp_{uuid.uuid4().hex[:12]}"
                     self._track_lineage(variant, hypothesis, "spawned", [result.id])
                     variants.append(variant)
 

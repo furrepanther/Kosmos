@@ -120,8 +120,18 @@ def get_world_model(
             # Simple Mode: Use Neo4j via existing KnowledgeGraph
             from kosmos.world_model.simple import Neo4jWorldModel
 
-            _world_model = Neo4jWorldModel()
-            logger.info("✓ Neo4jWorldModel initialized (Simple Mode)")
+            wm = Neo4jWorldModel()
+            if not wm.graph.connected:
+                logger.warning(
+                    "Neo4j unavailable, falling back to InMemoryWorldModel. "
+                    "Graph data will not persist across restarts."
+                )
+                from kosmos.world_model.in_memory import InMemoryWorldModel
+                _world_model = InMemoryWorldModel()
+                logger.info("InMemoryWorldModel initialized (fallback)")
+            else:
+                _world_model = wm
+                logger.info("Neo4jWorldModel initialized (Simple Mode)")
 
         elif mode == "production":
             # Production Mode: Polyglot persistence (Phase 4)

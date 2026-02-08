@@ -1,0 +1,39 @@
+{
+  "cli_data_path_flag": {
+    "exists": false,
+    "note": "No --data-path CLI argument exists. Paper requires: research objective + CSV dataset"
+  },
+  "data_provider_api": {
+    "has_load_user_data": false,
+    "has_load_csv": false,
+    "has_load_file": false,
+    "available_methods": [
+      "default_data_dir",
+      "generator",
+      "get_data",
+      "validate_data"
+    ]
+  },
+  "test_csv_loaded": {
+    "success": true,
+    "rows": 49,
+    "columns": [
+      "temperature",
+      "enzyme_activity",
+      "pH",
+      "substrate_concentration",
+      "replicate"
+    ],
+    "shape": [
+      49,
+      5
+    ]
+  },
+  "template_data_support": {
+    "generate_params": [
+      "protocol"
+    ],
+    "supports_data_path": false,
+    "note": "Templates check for data_path variable in exec scope but it is never passed from agent pipeline"
+  }
+}

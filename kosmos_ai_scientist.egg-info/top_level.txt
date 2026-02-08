@@ -1,1 +1,3 @@
 kosmos
+kosmos-claude-scientific-skills
+kosmos-reference

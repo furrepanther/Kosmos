@@ -111,6 +111,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             - Method → use graph.create_method()
             - Other types → create generic labeled node
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping add_entity for {entity.id}")
+            return entity.id
+
         if entity.type == "Paper":
             return self._add_paper_entity(entity, merge)
         elif entity.type == "Concept":
@@ -217,6 +221,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         For entity types not in the standard KnowledgeGraph, we create
         generic nodes with the appropriate label.
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping _add_generic_entity for {entity.id}")
+            return entity.id
+
         # Build Cypher query to create or merge node
         if merge:
             # MERGE creates if not exists, matches if exists
@@ -279,6 +287,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             - If not found, query for generic entity types
             - Convert Neo4j node to Entity model
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping get_entity for {entity_id}")
+            return None
+
         # Try standard types first
         node = self.graph.get_paper(entity_id)
         if node:
@@ -391,6 +403,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Raises:
             EntityNotFoundError: If entity doesn't exist
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping update_entity for {entity_id}")
+            return
+
         # Query for node
         cypher = """
         MATCH (n)
@@ -420,6 +436,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Raises:
             EntityNotFoundError: If entity doesn't exist
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping delete_entity for {entity_id}")
+            return
+
         # DETACH DELETE removes node and all its relationships
         cypher = """
         MATCH (n)
@@ -453,6 +473,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             - Use existing create_citation, create_authored, etc. for standard types
             - Use generic relationship creation for custom types
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping add_relationship for {relationship.id}")
+            return relationship.id
+
         # Use existing methods for standard relationship types
         if relationship.type == "CITES":
             # Note: create_citation expects paper_id, cited_paper_id
@@ -477,6 +501,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
 
     def _add_generic_relationship(self, relationship: Relationship) -> str:
         """Add generic relationship type."""
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping _add_generic_relationship for {relationship.id}")
+            return relationship.id
+
         cypher = f"""
         MATCH (source), (target)
         WHERE (source.entity_id = $source_id OR source.paper_id = $source_id)
@@ -519,6 +547,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Returns:
             Relationship if found, None otherwise
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping get_relationship for {relationship_id}")
+            return None
+
         cypher = """
         MATCH (source)-[r]->(target)
         WHERE r.relationship_id = $relationship_id
@@ -580,6 +612,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Returns:
             List of related entities
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping query_related_entities for {entity_id}")
+            return []
+
         # Build Cypher query based on direction
         if direction == "outgoing":
             pattern = f"(start)-[r]->{{1,{max_depth}}}(related)"
@@ -630,6 +666,15 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
                 "relationships": [...]
             }
         """
+        if not self.graph.connected:
+            logger.debug("Neo4j not connected, skipping export_graph")
+            # Write empty export
+            filepath_obj = Path(filepath)
+            filepath_obj.parent.mkdir(parents=True, exist_ok=True)
+            with open(filepath, "w") as f:
+                json.dump({"entities": [], "relationships": []}, f, indent=2)
+            return
+
         logger.info(f"Exporting graph to {filepath}")
 
         # Get statistics
@@ -726,6 +771,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             4. Import relationships (after entities exist)
             5. Log statistics
         """
+        if not self.graph.connected:
+            logger.debug("Neo4j not connected, skipping import_graph")
+            return
+
         logger.info(f"Importing graph from {filepath}")
 
         # Load file
@@ -786,6 +835,17 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Returns:
             Dictionary with counts and types
         """
+        if not self.graph.connected:
+            logger.debug("Neo4j not connected, returning zeroed statistics")
+            return {
+                "entity_count": 0,
+                "relationship_count": 0,
+                "entity_types": {},
+                "relationship_types": {},
+                "projects": [],
+                "storage_size_mb": 0.0,
+            }
+
         project_filter = f"WHERE n.project = '{project}'" if project else ""
 
         # Total entity count
@@ -852,6 +912,9 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Returns:
             Storage size in MB, or 0.0 if unable to determine
         """
+        if not self.graph.connected:
+            return 0.0
+
         try:
             # Method 1: Try APOC procedure (most accurate)
             try:
@@ -906,6 +969,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         Args:
             project: Optional project to reset (None = reset ALL data)
         """
+        if not self.graph.connected:
+            logger.debug("Neo4j not connected, skipping reset")
+            return
+
         if project:
             logger.warning(f"Resetting project: {project}")
             cypher = "MATCH (n {project: $project}) DETACH DELETE n"
@@ -933,6 +1000,10 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             entity_id: Entity to verify
             verified_by: Who verified (email/username)
         """
+        if not self.graph.connected:
+            logger.debug(f"Neo4j not connected, skipping verify_entity for {entity_id}")
+            return
+
         cypher = """
         MATCH (n)
         WHERE n.entity_id = $entity_id OR n.paper_id = $entity_id
@@ -968,7 +1039,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             - Appends to existing annotations array
             - Timestamps are ISO 8601 formatted
         """
-        if not self.connected:
+        if not self.graph.connected:
             logger.warning(
                 f"Not connected to Neo4j, annotation not persisted for {entity_id}"
             )
@@ -995,7 +1066,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         """
 
         try:
-            result = self.graph.run(
+            result = self.graph.graph.run(
                 query,
                 entity_id=entity_id,
                 annotation=json.dumps(ann_dict),
@@ -1031,7 +1102,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
             - Skips malformed annotation entries with warning
             - Returns annotations in order they were added
         """
-        if not self.connected:
+        if not self.graph.connected:
             logger.debug(f"Not connected to Neo4j, returning empty annotations for {entity_id}")
             return []
 
@@ -1042,7 +1113,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         """
 
         try:
-            result = self.graph.run(query, entity_id=entity_id).data()
+            result = self.graph.graph.run(query, entity_id=entity_id).data()
 
             if not result:
                 logger.debug(f"Entity not found: {entity_id}")

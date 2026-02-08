@@ -1,0 +1,21 @@
+{
+  "interpretation_received": true,
+  "interpretation_type": "ResultInterpretation",
+  "hypothesis_supported": true,
+  "confidence": 0.85,
+  "summary": "The experimental results provide strong statistical evidence supporting the hypothesis that higher temperature increases enzyme activity, with a large effect size (Cohen's d = 0.8) and high statistical significance (p = 0.003). However, the relationship between temperature and enzyme activity is typ",
+  "key_findings": [
+    "Statistically significant difference in enzyme activity between temperature conditions (p = 0.003)",
+    "Large effect size (Cohen's d = 0.8) indicating substantial biological relevance",
+    "Adequate sample size (n=100) providing reasonable statistical power"
+  ],
+  "anomalies_detected": [],
+  "supports_hypothesis_method": "LLM-based (not formal statistical criteria)",
+  "gap_notes": [
+    "supports_hypothesis set by LLM interpretation, not formal criteria",
+    "No check for _data_source (synthetic vs real)",
+    "No check_assumptions() called before interpretation"
+  ],
+  "status": "PASS",
+  "duration_seconds": 20.66
+}

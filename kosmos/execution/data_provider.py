@@ -182,7 +182,9 @@ class SyntheticDataGenerator:
     ) -> pd.DataFrame:
         """Generate data using domain-specific template."""
         columns = template.get("columns", {})
-        effect_size = kwargs.get("effect_size", template.get("effect_size", 0.5))
+        effect_size = kwargs.get("effect_size")
+        if effect_size is None:
+            effect_size = self._randomize_effect_size()
         groups = kwargs.get("groups", template.get("groups", ["control", "experimental"]))
         n_per_group = kwargs.get("n_per_group", template.get("n_per_group", n_samples // len(groups)))
 
@@ -234,13 +236,33 @@ class SyntheticDataGenerator:
 
         return pd.DataFrame(data)
 
+    def _randomize_effect_size(self) -> float:
+        """Randomize effect size to prevent guaranteed false positives.
+
+        Distribution: 30% null (0.0), 20% small (0.2), 20% medium (0.5),
+        20% large (0.8), 10% random uniform [0, 1].
+        """
+        roll = self.rng.random()
+        if roll < 0.30:
+            return 0.0
+        elif roll < 0.50:
+            return 0.2
+        elif roll < 0.70:
+            return 0.5
+        elif roll < 0.90:
+            return 0.8
+        else:
+            return float(self.rng.uniform(0.0, 1.0))
+
     def _generate_default_data(
         self,
         n_samples: int,
         **kwargs
     ) -> pd.DataFrame:
         """Generate default two-group comparison data."""
-        effect_size = kwargs.get("effect_size", 0.5)
+        effect_size = kwargs.get("effect_size")
+        if effect_size is None:
+            effect_size = self._randomize_effect_size()
         n_per_group = n_samples // 2
 
         # Generate control and experimental groups
@@ -316,7 +338,17 @@ class DataProvider:
             path = Path(file_path)
             if path.exists():
                 try:
-                    df = pd.read_csv(path)
+                    suffix = path.suffix.lower()
+                    if suffix == '.tsv':
+                        df = pd.read_csv(path, sep='\t')
+                    elif suffix == '.parquet':
+                        df = pd.read_parquet(path)
+                    elif suffix == '.json':
+                        df = pd.read_json(path)
+                    elif suffix == '.jsonl':
+                        df = pd.read_json(path, lines=True)
+                    else:
+                        df = pd.read_csv(path)
                     logger.info(f"Loaded data from file: {file_path} ({len(df)} rows)")
                     return df, f"file:{file_path}"
                 except Exception as e:

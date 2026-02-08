@@ -195,6 +195,12 @@ class MLAnalyzer:
                 - confusion_matrix: Confusion matrix
                 - classification_report: Detailed report string
         """
+        # Auto-detect multiclass targets
+        n_classes = len(np.unique(y_true))
+        if average == 'binary' and n_classes > 2:
+            average = 'weighted'
+            logger.info(f"Auto-switched to average='weighted' for {n_classes}-class target")
+
         # Calculate metrics
         accuracy = accuracy_score(y_true, y_pred)
         precision = precision_score(y_true, y_pred, average=average, zero_division=0)

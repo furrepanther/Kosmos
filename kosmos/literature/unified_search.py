@@ -76,7 +76,7 @@ class UnifiedLiteratureSearch:
     def search(
         self,
         query: str,
-        max_results_per_source: int = 10,
+        max_results_per_source: int = 50,
         total_max_results: Optional[int] = None,
         fields: Optional[List[str]] = None,
         year_from: Optional[int] = None,
@@ -173,6 +173,14 @@ class UnifiedLiteratureSearch:
                 completed_sources = [s.value for s, c in search_clients.items()
                                      if any(f.done() for f in future_to_source if future_to_source[f] == s)]
                 logger.warning(f"Literature search timed out after {self.search_timeout}s. Completed sources: {completed_sources}")
+                # Collect any late-arriving results that completed between timeout and catch
+                for future in future_to_source:
+                    if future.done() and not future.cancelled():
+                        try:
+                            papers = future.result(timeout=0)
+                            all_papers.extend(papers)
+                        except Exception:
+                            pass
 
         logger.info(f"Total papers retrieved (before dedup): {len(all_papers)}")
 

@@ -1,0 +1,36 @@
+{
+  "count": 3,
+  "response_type": "HypothesisGenerationResponse",
+  "hypotheses": [
+    {
+      "statement": "Increasing temperature from 20\u00b0C to 40\u00b0C will cause a proportional increase in the reaction rate of the enzyme catalase, as measured by the volume of oxygen gas produced from hydrogen peroxide decompo",
+      "has_rationale": true,
+      "has_domain": true,
+      "novelty_score": null,
+      "testability_score": 0.95,
+      "confidence_score": 0.95
+    },
+    {
+      "statement": "For the enzyme amylase, a 10\u00b0C increase in temperature within the range of 25\u00b0C to 55\u00b0C will cause a decrease in the Michaelis constant (Km) by at least 20%, indicating increased substrate binding aff",
+      "has_rationale": true,
+      "has_domain": true,
+      "novelty_score": null,
+      "testability_score": 0.85,
+      "confidence_score": 0.7
+    },
+    {
+      "statement": "Exposure of the enzyme lactate dehydrogenase (LDH) to a sustained temperature of 45\u00b0C for 30 minutes will cause an irreversible reduction in its specific activity by over 50% compared to a control kep",
+      "has_rationale": true,
+      "has_domain": true,
+      "novelty_score": null,
+      "testability_score": 0.9,
+      "confidence_score": 0.85
+    }
+  ],
+  "novelty_checker_integrated": false,
+  "novelty_checker_note": "NoveltyChecker exists but never called from HypothesisGeneratorAgent",
+  "require_novelty_check_config": false,
+  "min_novelty_score_config": 0.5,
+  "status": "PASS",
+  "duration_seconds": 26.43
+}

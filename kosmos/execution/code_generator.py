@@ -126,6 +126,18 @@ class TTestComparisonCodeTemplate(CodeTemplate):
             "# Clean data",
             "df = df.dropna()",
             "",
+            "# Check statistical assumptions before t-test",
+            f"_group_data = {{g: df[df['{group_var}']==g]['{measure_var}'].values for g in df['{group_var}'].unique()}}",
+            "for _gname, _gvals in _group_data.items():",
+            "    _shap_stat, _shap_p = stats.shapiro(_gvals[:5000]) if len(_gvals) >= 8 else (1.0, 1.0)",
+            "    if _shap_p < 0.05:",
+            "        print(f'WARNING: Normality assumption violated for group {{_gname}} (Shapiro p={{_shap_p:.4f}})')",
+            "_groups_list = list(_group_data.values())",
+            "if len(_groups_list) == 2:",
+            "    _lev_stat, _lev_p = stats.levene(*_groups_list)",
+            "    if _lev_p < 0.05:",
+            "        print(f'WARNING: Equal variance assumption violated (Levene p={{_lev_p:.4f}})')",
+            "",
             "# Perform t-test comparison",
             "analyzer = DataAnalyzer()",
             f"result = analyzer.ttest_comparison(",
@@ -157,6 +169,14 @@ class TTestComparisonCodeTemplate(CodeTemplate):
             "        output_path=str(figure_path)",
             "    )",
             "    result['figure_path'] = str(figure_path)",
+            "",
+            "# Propagate data source and assumption checks into results",
+            "if '_data_source' in dir():",
+            "    result['data_source'] = _data_source",
+            "result['assumption_checks'] = {",
+            "    'normality_tested': True,",
+            "    'sample_size_adequate': len(df) >= 30,",
+            "}",
             "",
             "# Return results for collection",
             "results = result"
@@ -232,6 +252,14 @@ class CorrelationAnalysisCodeTemplate(CodeTemplate):
             "# Clean data",
             "df = df.dropna()",
             "",
+            "# Check statistical assumptions before correlation",
+            f"for _col in ['{x_var}', '{y_var}']:",
+            "    _vals = df[_col].values",
+            "    if len(_vals) >= 8:",
+            "        _shap_stat, _shap_p = stats.shapiro(_vals[:5000])",
+            "        if _shap_p < 0.05:",
+            f"            print(f'WARNING: Normality assumption violated for {{_col}} (Shapiro p={{_shap_p:.4f}})')",
+            "",
             "# Perform correlation analysis",
             "analyzer = DataAnalyzer()",
             f"result = analyzer.correlation_analysis(",
@@ -261,6 +289,14 @@ class CorrelationAnalysisCodeTemplate(CodeTemplate):
             "        output_path=str(figure_path)",
             "    )",
             "    result['figure_path'] = str(figure_path)",
+            "",
+            "# Propagate data source and assumption checks into results",
+            "if '_data_source' in dir():",
+            "    result['data_source'] = _data_source",
+            "result['assumption_checks'] = {",
+            "    'normality_tested': True,",
+            "    'sample_size_adequate': len(df) >= 30,",
+            "}",
             "",
             "# Return results",
             "results = result"
@@ -350,6 +386,14 @@ class LogLogScalingCodeTemplate(CodeTemplate):
             "    )",
             "    result['figure_path'] = str(figure_path)",
             "",
+            "# Propagate data source and assumption checks into results",
+            "if '_data_source' in dir():",
+            "    result['data_source'] = _data_source",
+            "result['assumption_checks'] = {",
+            "    'normality_tested': False,",
+            "    'sample_size_adequate': len(df) >= 30,",
+            "}",
+            "",
             "# Return results",
             "results = result"
         ]
@@ -365,7 +409,9 @@ class MLExperimentCodeTemplate(CodeTemplate):
 
     def matches(self, protocol: ExperimentProtocol) -> bool:
         """Check if protocol is ML experiment."""
-        keywords = ['machine learning', 'classification', 'regression', 'cross-validation', 'model']
+        keywords = ['machine learning', 'classification', 'cross-validation',
+                     'random forest', 'neural network', 'logistic regression',
+                     'decision tree', 'svm', 'support vector']
 
         text = f"{protocol.name} {protocol.description}".lower()
 
@@ -438,8 +484,192 @@ class MLExperimentCodeTemplate(CodeTemplate):
             "        )",
             "        results['figure_path'] = str(figure_path)",
             "",
+            "# Propagate data source and assumption checks into results",
+            "if '_data_source' in dir():",
+            "    results['data_source'] = _data_source",
+            "results['assumption_checks'] = {",
+            "    'normality_tested': False,",
+            "    'sample_size_adequate': len(df) >= 30,",
+            "}",
+            "",
             "# Return results",
             "results = results"
+        ]
+
+        return "\n".join(code_lines)
+
+
+class GenericComputationalCodeTemplate(CodeTemplate):
+    """
+    Generic template for computational experiments (biology, chemistry, etc.).
+
+    Acts as a catch-all when no other template matches. Generates scipy-based
+    analysis code with data loading, statistical tests, curve fitting, and
+    visualization.
+    """
+
+    def __init__(self):
+        super().__init__("generic_computational", ExperimentType.COMPUTATIONAL)
+
+    def matches(self, protocol: ExperimentProtocol) -> bool:
+        """Match COMPUTATIONAL experiments or act as catch-all."""
+        return protocol.experiment_type == ExperimentType.COMPUTATIONAL
+
+    def generate(self, protocol: ExperimentProtocol) -> str:
+        """Generate generic computational analysis code."""
+        vars_list = list(protocol.variables.keys())
+        x_var = vars_list[0] if len(vars_list) > 0 else 'x'
+        y_var = vars_list[1] if len(vars_list) > 1 else 'y'
+
+        seed = getattr(protocol, 'random_seed', 42) or 42
+
+        # Determine statistical tests from protocol
+        stat_tests = []
+        for test in protocol.statistical_tests:
+            test_type_str = test.test_type.value if hasattr(test.test_type, 'value') else str(test.test_type)
+            stat_tests.append(test_type_str.lower())
+
+        code_lines = [
+            "# Computational Experiment Analysis",
+            f"# Protocol: {protocol.name}",
+            "",
+            "import pandas as pd",
+            "import numpy as np",
+            "from scipy import stats",
+            "from scipy.optimize import curve_fit",
+            "from pathlib import Path",
+            "",
+            "# Data loading with synthetic fallback",
+            f"# Expected format: CSV with relevant columns",
+            "if 'data_path' in dir() and data_path and Path(data_path).exists():",
+            "    df = pd.read_csv(data_path)",
+            "    _data_source = 'file'",
+            "else:",
+            f"    # Generate synthetic data for computational experiment",
+            f"    np.random.seed({seed})",
+            f"    n = 100",
+            f"    {x_var}_data = np.linspace(0, 10, n)",
+            f"    noise = np.random.normal(0, 0.5, n)",
+            f"    {y_var}_data = 2.0 * np.exp(-0.3 * {x_var}_data) + noise",
+            f"    df = pd.DataFrame({{'{x_var}': {x_var}_data, '{y_var}': {y_var}_data}})",
+            "    _data_source = 'synthetic'",
+            "",
+            "# Clean data",
+            "df = df.dropna()",
+            f"print(f'Loaded {{len(df)}} samples (source: {{_data_source}})')",
+            "",
+            "# Statistical analysis",
+            "results = {}",
+            "results['n_samples'] = len(df)",
+            "results['data_source'] = _data_source",
+            "",
+            "# Descriptive statistics",
+            "results['descriptive'] = {}",
+            "for col in df.select_dtypes(include=[np.number]).columns:",
+            "    results['descriptive'][col] = {",
+            "        'mean': float(df[col].mean()),",
+            "        'std': float(df[col].std()),",
+            "        'median': float(df[col].median()),",
+            "        'min': float(df[col].min()),",
+            "        'max': float(df[col].max()),",
+            "    }",
+            "",
+            "# Primary statistical test",
+            "numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()",
+            "if len(numeric_cols) >= 2:",
+            "    col_x = numeric_cols[0]",
+            "    col_y = numeric_cols[1]",
+            "    x_vals = df[col_x].values",
+            "    y_vals = df[col_y].values",
+            "",
+            "    # Normality check",
+            "    for _col, _vals in [(col_x, x_vals), (col_y, y_vals)]:",
+            "        if len(_vals) >= 8:",
+            "            _shap_stat, _shap_p = stats.shapiro(_vals[:5000])",
+            "            if _shap_p < 0.05:",
+            "                print(f'WARNING: Normality assumption violated for {_col} (Shapiro p={_shap_p:.4f})')",
+            "",
+            "    # Correlation analysis",
+            "    pearson_r, pearson_p = stats.pearsonr(x_vals, y_vals)",
+            "    spearman_r, spearman_p = stats.spearmanr(x_vals, y_vals)",
+            "    results['correlation'] = {",
+            "        'pearson_r': float(pearson_r),",
+            "        'pearson_p': float(pearson_p),",
+            "        'spearman_r': float(spearman_r),",
+            "        'spearman_p': float(spearman_p),",
+            "    }",
+            "    results['p_value'] = float(pearson_p)",
+            "    results['effect_size'] = float(pearson_r)",
+            "",
+            "    # Nonlinear curve fitting (exponential decay model)",
+            "    try:",
+            "        def exp_model(x, a, b, c):",
+            "            return a * np.exp(b * x) + c",
+            "        popt, pcov = curve_fit(exp_model, x_vals, y_vals, p0=[1, -0.1, 0], maxfev=5000)",
+            "        y_fit = exp_model(x_vals, *popt)",
+            "        ss_res = np.sum((y_vals - y_fit) ** 2)",
+            "        ss_tot = np.sum((y_vals - np.mean(y_vals)) ** 2)",
+            "        r_squared = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0.0",
+            "        results['curve_fit'] = {",
+            "            'model': 'exponential',",
+            "            'params': {'a': float(popt[0]), 'b': float(popt[1]), 'c': float(popt[2])},",
+            "            'r_squared': float(r_squared),",
+            "        }",
+            "    except Exception as e:",
+            "        print(f'Curve fitting failed: {e}')",
+            "        results['curve_fit'] = {'model': 'exponential', 'error': str(e)}",
+            "",
+            "    # Linear regression as baseline",
+            "    slope, intercept, r_value, p_value, std_err = stats.linregress(x_vals, y_vals)",
+            "    results['linear_regression'] = {",
+            "        'slope': float(slope),",
+            "        'intercept': float(intercept),",
+            "        'r_squared': float(r_value ** 2),",
+            "        'p_value': float(p_value),",
+            "        'std_err': float(std_err),",
+            "    }",
+            "",
+            "elif len(numeric_cols) == 1:",
+            "    # Single variable: one-sample t-test against zero",
+            "    col = numeric_cols[0]",
+            "    vals = df[col].values",
+            "    t_stat, p_value = stats.ttest_1samp(vals, 0)",
+            "    results['one_sample_ttest'] = {",
+            "        't_statistic': float(t_stat),",
+            "        'p_value': float(p_value),",
+            "        'mean': float(np.mean(vals)),",
+            "        'std': float(np.std(vals)),",
+            "    }",
+            "    results['p_value'] = float(p_value)",
+            "    results['effect_size'] = float(np.mean(vals) / np.std(vals)) if np.std(vals) > 0 else 0.0",
+            "",
+            "# Generate publication-quality figure",
+            "from kosmos.analysis.visualization import PublicationVisualizer",
+            "viz = PublicationVisualizer()",
+            "",
+            "if 'figure_path' in dir() and figure_path and len(numeric_cols) >= 2:",
+            "    viz.scatter_with_regression(",
+            "        x=df[numeric_cols[0]].values,",
+            "        y=df[numeric_cols[1]].values,",
+            "        x_label=numeric_cols[0],",
+            "        y_label=numeric_cols[1],",
+            f"        title='{protocol.name}',",
+            "        output_path=str(figure_path)",
+            "    )",
+            "    results['figure_path'] = str(figure_path)",
+            "",
+            "# Assumption checks",
+            "results['assumption_checks'] = {",
+            "    'normality_tested': True,",
+            "    'sample_size_adequate': len(df) >= 30,",
+            "}",
+            "",
+            "# Print summary",
+            "print(f'Analysis complete: {len(results)} result keys')",
+            "if 'p_value' in results:",
+            "    print(f'Primary p-value: {results[\"p_value\"]:.6f}')",
+            "if 'effect_size' in results:",
+            "    print(f'Effect size: {results[\"effect_size\"]:.4f}')",
         ]
 
         return "\n".join(code_lines)
@@ -480,9 +710,17 @@ class ExperimentCodeGenerator:
             try:
                 self.llm_client = ClaudeClient()
             except (ValueError, Exception) as e:
-                logger.warning(f"Failed to initialize ClaudeClient: {e}. LLM generation will be disabled.")
-                self.llm_client = None
-                self.use_llm = False
+                logger.warning(f"ClaudeClient failed: {e}. Trying LiteLLM fallback.")
+                try:
+                    from kosmos.core.providers.litellm_provider import LiteLLMProvider
+                    from kosmos.config import get_config
+                    config = get_config()
+                    self.llm_client = LiteLLMProvider(model=config.model)
+                    self.use_llm = True
+                except Exception as e2:
+                    logger.warning(f"LiteLLM fallback also failed: {e2}. LLM generation disabled.")
+                    self.llm_client = None
+                    self.use_llm = False
         else:
             self.llm_client = llm_client if use_llm else None
 
@@ -497,7 +735,8 @@ class ExperimentCodeGenerator:
             TTestComparisonCodeTemplate(),
             CorrelationAnalysisCodeTemplate(),
             LogLogScalingCodeTemplate(),
-            MLExperimentCodeTemplate()
+            MLExperimentCodeTemplate(),
+            GenericComputationalCodeTemplate(),  # Catch-all for COMPUTATIONAL
         ]
 
         logger.info(f"Registered {len(self.templates)} code templates")

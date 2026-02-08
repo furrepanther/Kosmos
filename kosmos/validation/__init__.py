@@ -42,6 +42,11 @@ from .benchmark_dataset import (
     BenchmarkGenerator,
     create_paper_benchmark,
 )
+from .accuracy_validator import (
+    AccuracyValidator,
+    AccuracyValidationReport,
+    ValidationResult,
+)
 
 __all__ = [
     "ScholarEvalValidator",
@@ -61,4 +66,8 @@ __all__ = [
     "BenchmarkFinding",
     "BenchmarkGenerator",
     "create_paper_benchmark",
+    # Accuracy validation pipeline
+    "AccuracyValidator",
+    "AccuracyValidationReport",
+    "ValidationResult",
 ]

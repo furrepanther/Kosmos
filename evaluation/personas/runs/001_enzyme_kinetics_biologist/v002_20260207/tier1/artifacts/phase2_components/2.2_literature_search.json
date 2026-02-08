@@ -1,0 +1,37 @@
+{
+  "count": 30,
+  "papers": [
+    {
+      "title": "Nonlinear temperature sensitivity of enzyme kinetics explains canceling effect\u2014a case study on loamy haplic Luvisol",
+      "source": "PaperSource.SEMANTIC_SCHOLAR",
+      "year": 2015,
+      "has_abstract": true
+    },
+    {
+      "title": "Temperature sensitivity of soil enzyme kinetics under N\u2010fertilization in two temperate forests",
+      "source": "PaperSource.SEMANTIC_SCHOLAR",
+      "year": 2012,
+      "has_abstract": false
+    },
+    {
+      "title": "The combined effects of reactant kinetics and enzyme stability explain the temperature dependence of metabolic rates",
+      "source": "PaperSource.SEMANTIC_SCHOLAR",
+      "year": 2017,
+      "has_abstract": true
+    },
+    {
+      "title": "Deterministic and Stochastic Models in Enzyme Kinetics",
+      "source": "PaperSource.ARXIV",
+      "year": 2025,
+      "has_abstract": true
+    },
+    {
+      "title": "Probing the modulation of enzyme kinetics by multi-temperature, time-resolved serial crystallography",
+      "source": "PaperSource.SEMANTIC_SCHOLAR",
+      "year": 2021,
+      "has_abstract": true
+    }
+  ],
+  "status": "PASS",
+  "duration_seconds": 0.01
+}

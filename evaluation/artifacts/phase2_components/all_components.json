@@ -1,0 +1,169 @@
+{
+  "2.1_hypothesis_generation": {
+    "count": 3,
+    "response_type": "HypothesisGenerationResponse",
+    "hypotheses": [
+      {
+        "statement": "Increasing temperature from 20\u00b0C to 40\u00b0C will cause a proportional increase in the reaction rate of the enzyme catalase, as measured by the volume of oxygen gas produced from hydrogen peroxide decompo",
+        "has_rationale": true,
+        "has_domain": true,
+        "novelty_score": null,
+        "testability_score": 0.95,
+        "confidence_score": 0.95
+      },
+      {
+        "statement": "For the enzyme amylase, a 10\u00b0C increase in temperature within the range of 25\u00b0C to 55\u00b0C will cause a decrease in the Michaelis constant (Km) by at least 20%, indicating increased substrate binding aff",
+        "has_rationale": true,
+        "has_domain": true,
+        "novelty_score": null,
+        "testability_score": 0.85,
+        "confidence_score": 0.7
+      },
+      {
+        "statement": "Exposure of the enzyme lactate dehydrogenase (LDH) to a sustained temperature of 45\u00b0C for 30 minutes will cause an irreversible reduction in its specific activity by over 50% compared to a control kep",
+        "has_rationale": true,
+        "has_domain": true,
+        "novelty_score": null,
+        "testability_score": 0.9,
+        "confidence_score": 0.85
+      }
+    ],
+    "novelty_checker_integrated": false,
+    "novelty_checker_note": "NoveltyChecker exists but never called from HypothesisGeneratorAgent",
+    "require_novelty_check_config": false,
+    "min_novelty_score_config": 0.5,
+    "status": "PASS",
+    "duration_seconds": 26.43
+  },
+  "2.2_literature_search": {
+    "count": 30,
+    "papers": [
+      {
+        "title": "Nonlinear temperature sensitivity of enzyme kinetics explains canceling effect\u2014a case study on loamy haplic Luvisol",
+        "source": "PaperSource.SEMANTIC_SCHOLAR",
+        "year": 2015,
+        "has_abstract": true
+      },
+      {
+        "title": "Temperature sensitivity of soil enzyme kinetics under N\u2010fertilization in two temperate forests",
+        "source": "PaperSource.SEMANTIC_SCHOLAR",
+        "year": 2012,
+        "has_abstract": false
+      },
+      {
+        "title": "The combined effects of reactant kinetics and enzyme stability explain the temperature dependence of metabolic rates",
+        "source": "PaperSource.SEMANTIC_SCHOLAR",
+        "year": 2017,
+        "has_abstract": true
+      },
+      {
+        "title": "Deterministic and Stochastic Models in Enzyme Kinetics",
+        "source": "PaperSource.ARXIV",
+        "year": 2025,
+        "has_abstract": true
+      },
+      {
+        "title": "Probing the modulation of enzyme kinetics by multi-temperature, time-resolved serial crystallography",
+        "source": "PaperSource.SEMANTIC_SCHOLAR",
+        "year": 2021,
+        "has_abstract": true
+      }
+    ],
+    "status": "PASS",
+    "duration_seconds": 0.01
+  },
+  "2.3_experiment_design": {
+    "count": 1,
+    "protocols": [
+      {
+        "name": "unnamed",
+        "has_steps": false,
+        "step_count": 0,
+        "has_variables": false,
+        "has_controls": false,
+        "has_statistical_tests": false,
+        "experiment_type": "unknown"
+      }
+    ],
+    "power_analyzer_integrated": false,
+    "experiment_validator_integrated": false,
+    "gap_notes": [
+      "PowerAnalyzer exists but never called by designer",
+      "ExperimentValidator exists but never imported by designer",
+      "Inline _validate_protocol() used instead (~37 lines vs ~500 line validator)"
+    ],
+    "status": "PASS",
+    "duration_seconds": 95.63
+  },
+  "2.4_code_execution": {
+    "code_generated": true,
+    "code_length": 2078,
+    "code_preview": "# T-Test Comparison Analysis\n# Generated from protocol template\n\nimport pandas as pd\nimport numpy as np\nfrom scipy import stats\nfrom pathlib import Path\nfrom kosmos.execution.data_analysis import DataAnalyzer\n\n# Data loading with synthetic fallback (Issue #51 fix)\n# Expected format: CSV with columns 'temperature' and 'enzyme_activity'\nif 'data_path' in dir() and data_path and Path(data_path).exists():\n    df = pd.read_csv(data_path)\n    _data_source = 'file'\nelse:\n    # Generate synthetic data f",
+    "has_data_source_flag": true,
+    "uses_synthetic_data": true,
+    "hardcoded_effect_size": true,
+    "execution": {
+      "success": false,
+      "stdout": "T-statistic: {result['t_statistic']:.4f}\nP-value: {result['p_value']:.6f}\nSignificance: {result['significance_label']}\nMean difference: {result['mean_difference']:.4f}\n",
+      "stderr": "\nTraceback (most recent call last):\n  File \"/mnt/c/python/Kosmos/kosmos/execution/executor.py\", line 398, in _execute_once\n    exec(code, exec_globals, exec_locals)\n  File \"<string>\", line 50, in <module>\n  File \"<string>\", line 50, in <dictcomp>\nNameError: name 'df' is not defined\n",
+      "error": "name 'df' is not defined",
+      "return_value": "None"
+    },
+    "gap_notes": [
+      "Synthetic data flag in code: True",
+      "Uses synthetic data: True",
+      "Hardcoded effect_size=0.5: True",
+      "Direct exec() used (no Docker sandbox by default)"
+    ],
+    "status": "PASS",
+    "duration_seconds": 1.27
+  },
+  "2.5_data_analysis": {
+    "interpretation_received": true,
+    "interpretation_type": "ResultInterpretation",
+    "hypothesis_supported": true,
+    "confidence": 0.85,
+    "summary": "The experimental results provide strong statistical evidence supporting the hypothesis that higher temperature increases enzyme activity, with a large effect size (Cohen's d = 0.8) and high statistical significance (p = 0.003). However, the relationship between temperature and enzyme activity is typ",
+    "key_findings": [
+      "Statistically significant difference in enzyme activity between temperature conditions (p = 0.003)",
+      "Large effect size (Cohen's d = 0.8) indicating substantial biological relevance",
+      "Adequate sample size (n=100) providing reasonable statistical power"
+    ],
+    "anomalies_detected": [],
+    "supports_hypothesis_method": "LLM-based (not formal statistical criteria)",
+    "gap_notes": [
+      "supports_hypothesis set by LLM interpretation, not formal criteria",
+      "No check for _data_source (synthetic vs real)",
+      "No check_assumptions() called before interpretation"
+    ],
+    "status": "PASS",
+    "duration_seconds": 20.66
+  },
+  "2.6_convergence_detection": {
+    "test_max_iterations": {
+      "should_stop": true,
+      "reason": "StoppingReason.ITERATION_LIMIT",
+      "details": "Iteration 5/5"
+    },
+    "test_novelty_decline": {
+      "should_stop": true,
+      "reason": "StoppingReason.NO_TESTABLE_HYPOTHESES",
+      "novelty_trend": [
+        0.8,
+        0.6,
+        0.4,
+        0.2,
+        0.1,
+        0.1
+      ],
+      "details": "0 untested hypotheses, 0 queued experiments"
+    },
+    "cost_tracking": {
+      "total_cost": 0.0,
+      "is_always_zero": true,
+      "note": "total_cost is never propagated from LLM calls"
+    },
+    "status": "PASS",
+    "duration_seconds": 0.0
+  }
+}

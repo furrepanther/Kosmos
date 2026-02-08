@@ -156,11 +156,78 @@ class SimulationExperimentTemplate(TemplateBase):
         )
 
 
+class GenericComputationalTemplate(TemplateBase):
+    """Fallback template for any COMPUTATIONAL experiment not matched by specialized templates."""
+
+    def __init__(self):
+        super().__init__(
+            name="generic_computational",
+            experiment_type=ExperimentType.COMPUTATIONAL,
+            title="Generic Computational Experiment Template",
+            description="Fallback template for computational experiments that don't match specialized templates.",
+            version="1.0.0"
+        )
+        self.metadata.suitable_for = ["General computational analysis", "Custom simulations", "Numerical experiments"]
+        self.metadata.rigor_score = 0.65
+
+    def is_applicable(self, hypothesis: Hypothesis) -> bool:
+        """Always applicable as a last-resort fallback."""
+        return True
+
+    def get_applicability_score(self, hypothesis: Hypothesis) -> float:
+        """Low priority so specialized templates are preferred."""
+        return 0.1
+
+    def generate_protocol(self, params: TemplateCustomizationParams) -> ExperimentProtocol:
+        """Generate a generic computational protocol."""
+        hypothesis = params.hypothesis
+
+        steps = [
+            ProtocolStep(step_number=1, title="Setup", description="Define computational parameters", action="Configure experiment parameters based on hypothesis variables", expected_duration_minutes=30, library_imports=["numpy"]),
+            ProtocolStep(step_number=2, title="Data Preparation", description="Generate or load data", action="Load dataset or generate synthetic data with fixed random seed for reproducibility", expected_duration_minutes=30, requires_steps=[1], library_imports=["numpy", "pandas"]),
+            ProtocolStep(step_number=3, title="Computation", description="Execute computational analysis", action="Run the computational analysis on prepared data, record all outputs", expected_duration_minutes=120, requires_steps=[2], library_imports=["numpy", "scipy"]),
+            ProtocolStep(step_number=4, title="Statistical Analysis", description="Analyze results statistically", action="Compute relevant statistics, confidence intervals, and effect sizes", expected_duration_minutes=45, requires_steps=[3], library_imports=["scipy"]),
+            ProtocolStep(step_number=5, title="Visualization", description="Create result visualizations", action="Generate plots summarizing computational results", expected_duration_minutes=30, requires_steps=[4], library_imports=["matplotlib"]),
+        ]
+
+        variables = {
+            "input_parameter": Variable(name="input_parameter", type=VariableType.INDEPENDENT, description="Primary input variable", unit="TBD"),
+            "output_measure": Variable(name="output_measure", type=VariableType.DEPENDENT, description="Primary output measure", unit="TBD"),
+        }
+
+        statistical_tests = [
+            StatisticalTestSpec(test_type=StatisticalTest.T_TEST, description="Test for significant effect", null_hypothesis="H0: No significant effect", alternative="two-sided", alpha=0.05, variables=["output_measure"], required_power=0.8, expected_effect_size=0.5)
+        ]
+
+        resources = ResourceRequirements(compute_hours=2.0, memory_gb=4, gpu_required=False, estimated_cost_usd=2.0, estimated_duration_days=0.25, required_libraries=["numpy", "scipy", "matplotlib"], python_version="3.9+", can_parallelize=False, parallelization_factor=1)
+
+        return ExperimentProtocol(
+            name=f"Computational Experiment: {hypothesis.statement[:60]}",
+            hypothesis_id=hypothesis.id or "",
+            experiment_type=ExperimentType.COMPUTATIONAL,
+            domain=hypothesis.domain,
+            description=f"Generic computational experiment to test: {hypothesis.statement}",
+            objective="Computationally evaluate hypothesis using appropriate statistical methods",
+            steps=steps,
+            variables=variables,
+            control_groups=[],
+            statistical_tests=statistical_tests,
+            sample_size=100,
+            sample_size_rationale="Default sample size for computational experiment",
+            power_analysis_performed=False,
+            resource_requirements=resources,
+            validation_checks=[],
+            random_seed=42,
+            reproducibility_notes="Fix random seed for reproducibility",
+        )
+
+
 # Register templates
 def register_all_computational_templates():
     """Register all computational templates."""
     register_template(AlgorithmComparisonTemplate())
     register_template(SimulationExperimentTemplate())
+    register_template(GenericComputationalTemplate())
 
 
 register_all_computational_templates()
