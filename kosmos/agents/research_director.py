@@ -141,6 +141,15 @@ class ResearchDirectorAgent(BaseAgent):
         # Agent registry (will be populated during coordination)
         self.agent_registry: Dict[str, str] = {}  # agent_type -> agent_id
 
+        # Lazy-init agent slots for direct-call pattern (Issue #76 extension)
+        self._hypothesis_agent = None
+        self._experiment_designer = None
+        self._code_generator = None
+        self._code_executor = None
+        self._data_provider = None
+        self._data_analyst = None
+        self._hypothesis_refiner = None
+
         # Message correlation tracking
         self.pending_requests: Dict[str, Dict[str, Any]] = {}  # correlation_id -> request_info
 
@@ -1264,6 +1273,62 @@ class ResearchDirectorAgent(BaseAgent):
 
         return decision
 
+    def _apply_multiple_comparison_correction(self):
+        """
+        Apply Benjamini-Hochberg FDR correction to p-values from the current iteration.
+
+        When multiple hypotheses produce multiple p-values in the same iteration,
+        each must be corrected for family-wise error to avoid inflated Type I error.
+        """
+        from kosmos.execution.statistics import StatisticalValidator
+        from kosmos.db.operations import get_results_for_experiment
+
+        current_iteration = self.research_plan.iteration_count
+
+        # Collect p-values from recent results in DB
+        results_with_pvalues = []
+        try:
+            with get_session() as session:
+                for exp_id in self.research_plan.completed_experiments[-20:]:
+                    try:
+                        db_results = get_results_for_experiment(session, exp_id)
+                        for db_r in db_results:
+                            if db_r.p_value is not None:
+                                results_with_pvalues.append({
+                                    'result_id': db_r.id,
+                                    'p_value': db_r.p_value,
+                                    'supports_hypothesis': db_r.supports_hypothesis,
+                                })
+                    except Exception:
+                        continue
+        except Exception as e:
+            logger.warning(f"Failed to collect p-values for correction: {e}")
+            return
+
+        if len(results_with_pvalues) < 2:
+            return  # No correction needed for single test
+
+        p_values = [r['p_value'] for r in results_with_pvalues]
+        correction = StatisticalValidator.benjamini_hochberg_fdr(p_values)
+
+        corrections_applied = 0
+        for i, result_info in enumerate(results_with_pvalues):
+            was_sig = result_info['p_value'] < 0.05
+            now_sig = correction['significant'][i]
+            if was_sig and not now_sig:
+                corrections_applied += 1
+                logger.info(
+                    f"[FDR] Multiple comparison correction: result {result_info['result_id']} "
+                    f"p={result_info['p_value']:.4f} no longer significant after BH-FDR "
+                    f"(adjusted={correction['adjusted_p_values'][i]:.4f})"
+                )
+
+        if corrections_applied > 0:
+            logger.info(
+                f"[FDR] BH-FDR correction: {corrections_applied}/{len(p_values)} "
+                f"results lost significance"
+            )
+
     async def _handle_convergence_action(self):
         """
         Handle CONVERGE action by checking convergence directly.
@@ -1271,6 +1336,12 @@ class ResearchDirectorAgent(BaseAgent):
         Issue #76 fix: Replaces message-based convergence check with direct call.
         The ConvergenceDetector is a utility class, not an agent that can receive messages.
         """
+        # Apply multiple comparison correction before checking convergence
+        try:
+            self._apply_multiple_comparison_correction()
+        except Exception as e:
+            logger.warning(f"Multiple comparison correction failed (non-fatal): {e}")
+
         decision = self._check_convergence_direct()
 
         # Track rollout - convergence often involves literature review (Issue #58)
@@ -1314,6 +1385,596 @@ class ResearchDirectorAgent(BaseAgent):
                     self.research_plan.increment_iteration()
                 self._actions_this_iteration = 0
                 logger.info(f"[ITERATION] Continuing to iteration {self.research_plan.iteration_count}")
+
+    async def _handle_generate_hypothesis_action(self):
+        """
+        Handle GENERATE_HYPOTHESIS action by calling HypothesisGeneratorAgent directly.
+
+        Issue #76 extension: Replaces message-based hypothesis generation with direct call.
+        Same pattern as _handle_convergence_action() — agents are not registered in the
+        message router, so send_message() silently fails.
+        """
+        from kosmos.agents.hypothesis_generator import HypothesisGeneratorAgent
+
+        try:
+            # Lazy-init the agent
+            if self._hypothesis_agent is None:
+                self._hypothesis_agent = HypothesisGeneratorAgent(config=self.config)
+
+            logger.info("Generating hypotheses via direct call (bypassing message router)")
+
+            response = self._hypothesis_agent.generate_hypotheses(
+                research_question=self.research_question,
+                num_hypotheses=self.config.get("num_hypotheses", 3),
+                domain=self.domain,
+                store_in_db=True
+            )
+
+            # Track rollout (Issue #58)
+            self.rollout_tracker.increment("hypothesis_generation")
+
+            hypothesis_ids = [h.id for h in response.hypotheses]
+            count = len(hypothesis_ids)
+
+            logger.info(f"Generated {count} hypotheses via direct call")
+
+            # Reset error streak on success
+            self._reset_error_streak()
+
+            # Update research plan (thread-safe)
+            with self._research_plan_context():
+                for hyp_id in hypothesis_ids:
+                    self.research_plan.add_hypothesis(hyp_id)
+
+            # Persist hypotheses to knowledge graph
+            for hyp_id in hypothesis_ids:
+                self._persist_hypothesis_to_graph(hyp_id, agent_name="HypothesisGeneratorAgent")
+
+            # Update strategy stats (thread-safe)
+            with self._strategy_stats_context():
+                self.strategy_stats["hypothesis_generation"]["attempts"] += 1
+                if count > 0:
+                    self.strategy_stats["hypothesis_generation"]["successes"] += 1
+
+            # Transition workflow to DESIGNING_EXPERIMENTS on success
+            if count > 0:
+                with self._workflow_context():
+                    self.workflow.transition_to(
+                        WorkflowState.DESIGNING_EXPERIMENTS,
+                        action=f"Generated {count} hypotheses"
+                    )
+
+        except Exception as e:
+            logger.error(f"Direct hypothesis generation failed: {e}", exc_info=True)
+            self._handle_error_with_recovery(
+                error_source="HypothesisGeneratorAgent",
+                error_message=str(e),
+                recoverable=True,
+                error_details={"hypothesis_count_before": len(self.research_plan.hypothesis_pool)}
+            )
+
+    async def _handle_design_experiment_action(self, hypothesis_id: str):
+        """
+        Handle DESIGN_EXPERIMENT action by calling ExperimentDesignerAgent directly.
+
+        Issue #76 extension: Replaces message-based experiment design with direct call.
+        Same pattern as _handle_convergence_action().
+        """
+        from kosmos.agents.experiment_designer import ExperimentDesignerAgent
+
+        try:
+            # Lazy-init the agent
+            if self._experiment_designer is None:
+                self._experiment_designer = ExperimentDesignerAgent(config=self.config)
+
+            logger.info(f"Designing experiment for hypothesis {hypothesis_id} via direct call")
+
+            response = self._experiment_designer.design_experiment(
+                hypothesis_id=hypothesis_id,
+                store_in_db=True
+            )
+
+            # Track rollout (Issue #58)
+            self.rollout_tracker.increment("experiment_design")
+
+            protocol_id = response.protocol.id if response.protocol else None
+
+            logger.info(f"Designed experiment protocol {protocol_id} for hypothesis {hypothesis_id}")
+
+            # Reset error streak on success
+            self._reset_error_streak()
+
+            # Update research plan (thread-safe)
+            if protocol_id:
+                with self._research_plan_context():
+                    self.research_plan.add_experiment(protocol_id)
+
+            # Persist protocol to knowledge graph
+            if protocol_id and hypothesis_id:
+                self._persist_protocol_to_graph(protocol_id, hypothesis_id, agent_name="ExperimentDesignerAgent")
+
+            # Update strategy stats (thread-safe)
+            with self._strategy_stats_context():
+                self.strategy_stats["experiment_design"]["attempts"] += 1
+                if protocol_id:
+                    self.strategy_stats["experiment_design"]["successes"] += 1
+
+            # Transition workflow to EXECUTING on success
+            if protocol_id:
+                with self._workflow_context():
+                    self.workflow.transition_to(
+                        WorkflowState.EXECUTING,
+                        action=f"Designed experiment {protocol_id} for hypothesis {hypothesis_id}"
+                    )
+
+        except Exception as e:
+            logger.error(f"Direct experiment design failed: {e}", exc_info=True)
+            self._handle_error_with_recovery(
+                error_source="ExperimentDesignerAgent",
+                error_message=str(e),
+                recoverable=True,
+                error_details={"untested_hypotheses": len(self.research_plan.get_untested_hypotheses())}
+            )
+
+    async def _handle_execute_experiment_action(self, protocol_id: str):
+        """
+        Handle EXECUTE_EXPERIMENT action by running code generation + execution directly.
+
+        Issue #76 extension: Replaces message-based _send_to_executor() with direct call.
+        Replicates the logic from _handle_executor_response().
+        """
+        from kosmos.execution.code_generator import ExperimentCodeGenerator
+        from kosmos.execution.executor import CodeExecutor
+        from kosmos.execution.data_provider import DataProvider
+        from kosmos.models.experiment import ExperimentProtocol
+        from kosmos.db.operations import create_result
+        from uuid import uuid4
+
+        try:
+            # Lazy-init components
+            if self._code_generator is None:
+                self._code_generator = ExperimentCodeGenerator(use_templates=True, use_llm=True)
+            if self._code_executor is None:
+                self._code_executor = CodeExecutor(max_retries=3)
+            if self._data_provider is None:
+                self._data_provider = DataProvider(
+                    default_data_dir=self.data_path
+                )
+
+            logger.info(f"Executing experiment {protocol_id} via direct call")
+
+            # Load protocol from DB
+            hypothesis_id = None
+            protocol = None
+            with get_session() as session:
+                db_experiment = get_experiment(session, protocol_id)
+                if not db_experiment:
+                    raise ValueError(f"Experiment {protocol_id} not found in database")
+                hypothesis_id = db_experiment.hypothesis_id
+                # Reconstruct Pydantic model from stored protocol JSON
+                protocol_data = db_experiment.protocol
+                if isinstance(protocol_data, dict):
+                    protocol = ExperimentProtocol.model_validate(protocol_data)
+                else:
+                    raise ValueError(f"Experiment {protocol_id} has no valid protocol data")
+
+            # Generate code from protocol
+            code = self._code_generator.generate(protocol)
+
+            # Execute code
+            if self.data_path:
+                exec_result = self._code_executor.execute_with_data(
+                    code, self.data_path, retry_on_error=True
+                )
+            else:
+                exec_result = self._code_executor.execute(code, retry_on_error=True)
+
+            # Track rollout (Issue #58)
+            self.rollout_tracker.increment("experiment_execution")
+
+            # Extract metrics from execution result
+            return_value = exec_result.return_value if exec_result.return_value else {}
+            if isinstance(return_value, dict):
+                p_value = return_value.get("p_value")
+                effect_size = return_value.get("effect_size")
+                statistical_tests = {
+                    k: v for k, v in return_value.items()
+                    if k in ("t_statistic", "p_value", "effect_size",
+                             "mean_difference", "significance_label",
+                             "correlation", "r_squared")
+                }
+            else:
+                p_value = None
+                effect_size = None
+                statistical_tests = {}
+
+            # Sanitize return_value for JSON serialization — filter out non-serializable
+            # objects (e.g. sklearn Pipeline, numpy arrays) that would crash DB insert
+            def _json_safe(obj):
+                if obj is None or isinstance(obj, (str, int, float, bool)):
+                    return obj
+                if isinstance(obj, (list, tuple)):
+                    return [_json_safe(v) for v in obj]
+                if isinstance(obj, dict):
+                    return {k: _json_safe(v) for k, v in obj.items()}
+                try:
+                    import numpy as np
+                    if isinstance(obj, (np.integer,)):
+                        return int(obj)
+                    if isinstance(obj, (np.floating,)):
+                        return float(obj)
+                    if isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                except ImportError:
+                    pass
+                # Fallback: convert to string representation
+                return str(obj)
+
+            safe_data = _json_safe(return_value) if isinstance(return_value, dict) else {}
+            safe_stats = _json_safe(statistical_tests) if statistical_tests else {}
+
+            # Store result in DB
+            result_id = str(uuid4())
+            try:
+                with get_session() as session:
+                    create_result(
+                        session,
+                        id=result_id,
+                        experiment_id=protocol_id,
+                        data=safe_data,
+                        p_value=float(p_value) if p_value is not None else None,
+                        effect_size=float(effect_size) if effect_size is not None else None,
+                        statistical_tests=safe_stats,
+                    )
+            except Exception as db_err:
+                logger.error(f"Failed to store result in DB: {db_err}")
+
+            logger.info(f"Experiment {protocol_id} executed, result {result_id}")
+
+            # Reset error streak on success
+            self._reset_error_streak()
+
+            # Update research plan (thread-safe)
+            with self._research_plan_context():
+                self.research_plan.add_result(result_id)
+                self.research_plan.mark_experiment_complete(protocol_id)
+
+            # Persist result to knowledge graph
+            if hypothesis_id:
+                self._persist_result_to_graph(
+                    result_id, protocol_id, hypothesis_id, agent_name="CodeExecutor"
+                )
+
+            # Transition to analyzing state (thread-safe)
+            with self._workflow_context():
+                self.workflow.transition_to(
+                    WorkflowState.ANALYZING,
+                    action=f"Analyze result {result_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Direct experiment execution failed: {e}", exc_info=True)
+            self._handle_error_with_recovery(
+                error_source="CodeExecutor",
+                error_message=str(e),
+                recoverable=True,
+                error_details={"protocol_id": protocol_id}
+            )
+
+    async def _handle_analyze_result_action(self, result_id: str):
+        """
+        Handle ANALYZE_RESULT action by calling DataAnalystAgent directly.
+
+        Issue #76 extension: Replaces message-based _send_to_data_analyst() with direct call.
+        Replicates the logic from _handle_data_analyst_response().
+        """
+        from kosmos.agents.data_analyst import DataAnalystAgent
+        from kosmos.db.operations import get_result as db_get_result
+        from kosmos.models.result import ExperimentResult, ResultStatus, ExecutionMetadata
+        from kosmos.models.hypothesis import Hypothesis as PydanticHypothesis
+
+        try:
+            # Lazy-init the agent
+            if self._data_analyst is None:
+                self._data_analyst = DataAnalystAgent(config=self.config)
+
+            logger.info(f"Analyzing result {result_id} via direct call")
+
+            # Load result from DB
+            hypothesis_id = None
+            pydantic_result = None
+            pydantic_hyp = None
+
+            with get_session() as session:
+                db_result = db_get_result(session, result_id, with_experiment=True)
+                if not db_result:
+                    raise ValueError(f"Result {result_id} not found in database")
+
+                # Get hypothesis_id through experiment
+                experiment = db_result.experiment
+                if experiment:
+                    hypothesis_id = experiment.hypothesis_id
+
+                # Build minimal ExperimentResult from DB fields
+                import sys as _sys
+                import platform as _platform
+                _now = datetime.utcnow()
+                pydantic_result = ExperimentResult(
+                    id=db_result.id,
+                    experiment_id=db_result.experiment_id,
+                    protocol_id=db_result.experiment_id,
+                    status=ResultStatus.SUCCESS,
+                    raw_data=db_result.data or {},
+                    primary_p_value=db_result.p_value,
+                    primary_effect_size=db_result.effect_size,
+                    supports_hypothesis=db_result.supports_hypothesis,
+                    metadata=ExecutionMetadata(
+                        start_time=_now,
+                        end_time=_now,
+                        duration_seconds=0.0,
+                        python_version=_sys.version,
+                        platform=_platform.platform(),
+                        experiment_id=db_result.experiment_id,
+                        protocol_id=db_result.experiment_id,
+                    ),
+                )
+
+                # Load hypothesis if available
+                if hypothesis_id:
+                    db_hyp = get_hypothesis(session, hypothesis_id)
+                    if db_hyp:
+                        pydantic_hyp = PydanticHypothesis(
+                            id=db_hyp.id,
+                            research_question=db_hyp.research_question or self.research_question,
+                            statement=db_hyp.statement,
+                            rationale=db_hyp.rationale or "",
+                            domain=db_hyp.domain or self.domain or "general",
+                        )
+
+            # Call data analyst
+            interpretation = self._data_analyst.interpret_results(
+                result=pydantic_result,
+                hypothesis=pydantic_hyp,
+            )
+
+            # Track rollout (Issue #58)
+            self.rollout_tracker.increment("data_analysis")
+
+            # Extract interpretation fields
+            hypothesis_supported = interpretation.hypothesis_supported
+            confidence = interpretation.confidence if interpretation.confidence else 0.8
+            p_value = pydantic_result.primary_p_value
+            effect_size = pydantic_result.primary_effect_size
+
+            logger.info(
+                f"Result {result_id} interpretation: "
+                f"hypothesis {hypothesis_id} supported={hypothesis_supported}"
+            )
+
+            # Reset error streak on success
+            self._reset_error_streak()
+
+            # Update hypothesis status in research plan (thread-safe)
+            if hypothesis_id:
+                with self._research_plan_context():
+                    if hypothesis_supported is True:
+                        self.research_plan.mark_supported(hypothesis_id)
+                    elif hypothesis_supported is False:
+                        self.research_plan.mark_rejected(hypothesis_id)
+                    else:
+                        self.research_plan.mark_tested(hypothesis_id)
+
+            # Add SUPPORTS/REFUTES relationship to knowledge graph
+            if result_id and hypothesis_id and hypothesis_supported is not None:
+                self._add_support_relationship(
+                    result_id,
+                    hypothesis_id,
+                    supports=hypothesis_supported,
+                    confidence=confidence,
+                    p_value=p_value,
+                    effect_size=effect_size,
+                )
+
+            # Transition to refining state (thread-safe)
+            with self._workflow_context():
+                self.workflow.transition_to(
+                    WorkflowState.REFINING,
+                    action=f"Refine based on result {result_id}"
+                )
+
+        except Exception as e:
+            logger.error(f"Direct result analysis failed: {e}", exc_info=True)
+            self._handle_error_with_recovery(
+                error_source="DataAnalystAgent",
+                error_message=str(e),
+                recoverable=True,
+                error_details={"result_id": result_id}
+            )
+
+    async def _handle_refine_hypothesis_action(self, hypothesis_id: str):
+        """
+        Handle REFINE_HYPOTHESIS action by calling HypothesisRefiner directly.
+
+        Issue #76 extension: Replaces message-based _send_to_hypothesis_refiner()
+        with direct call. Replicates _handle_hypothesis_refiner_response().
+
+        HypothesisRefiner is a utility class (not a BaseAgent), same as ConvergenceDetector.
+        """
+        from kosmos.hypothesis.refiner import HypothesisRefiner, RetirementDecision
+        from kosmos.db.operations import (
+            get_hypothesis as db_get_hypothesis,
+            get_results_for_experiment,
+            create_hypothesis as db_create_hypothesis,
+        )
+        from kosmos.models.hypothesis import Hypothesis as PydanticHypothesis
+        from kosmos.models.result import ExperimentResult, ResultStatus, ExecutionMetadata
+
+        try:
+            # Lazy-init refiner
+            if self._hypothesis_refiner is None:
+                self._hypothesis_refiner = HypothesisRefiner(config=self.config)
+
+            logger.info(f"Refining hypothesis {hypothesis_id} via direct call")
+
+            # Load hypothesis from DB
+            pydantic_hyp = None
+            results_history = []
+
+            with get_session() as session:
+                db_hyp = db_get_hypothesis(session, hypothesis_id, with_experiments=True)
+                if not db_hyp:
+                    logger.warning(f"Hypothesis {hypothesis_id} not found, skipping refinement")
+                    return
+
+                pydantic_hyp = PydanticHypothesis(
+                    id=db_hyp.id,
+                    research_question=db_hyp.research_question or self.research_question,
+                    statement=db_hyp.statement,
+                    rationale=db_hyp.rationale or "",
+                    domain=db_hyp.domain or self.domain or "general",
+                    novelty_score=db_hyp.novelty_score,
+                    testability_score=db_hyp.testability_score,
+                    confidence_score=db_hyp.confidence_score,
+                )
+
+                # Get results for this hypothesis's experiments
+                if hasattr(db_hyp, 'experiments') and db_hyp.experiments:
+                    for exp in db_hyp.experiments:
+                        db_results = get_results_for_experiment(session, exp.id)
+                        for db_r in db_results:
+                            try:
+                                import sys as _sys
+                                import platform as _platform
+                                _now = datetime.utcnow()
+                                pydantic_r = ExperimentResult(
+                                    id=db_r.id,
+                                    experiment_id=db_r.experiment_id,
+                                    protocol_id=db_r.experiment_id,
+                                    status=ResultStatus.SUCCESS,
+                                    raw_data=db_r.data or {},
+                                    primary_p_value=db_r.p_value,
+                                    primary_effect_size=db_r.effect_size,
+                                    supports_hypothesis=db_r.supports_hypothesis,
+                                    metadata=ExecutionMetadata(
+                                        start_time=_now,
+                                        end_time=_now,
+                                        duration_seconds=0.0,
+                                        python_version=_sys.version,
+                                        platform=_platform.platform(),
+                                        experiment_id=db_r.experiment_id,
+                                        protocol_id=db_r.experiment_id,
+                                    ),
+                                )
+                                results_history.append(pydantic_r)
+                            except Exception as conv_err:
+                                logger.warning(f"Failed to convert result {db_r.id}: {conv_err}")
+
+            # Get latest result (for evaluate_hypothesis_status)
+            latest_result = results_history[-1] if results_history else None
+
+            if not latest_result:
+                logger.warning(f"No results found for hypothesis {hypothesis_id}, skipping refinement")
+                # Still update stats
+                with self._strategy_stats_context():
+                    self.strategy_stats["hypothesis_refinement"]["attempts"] += 1
+                self.rollout_tracker.increment("hypothesis_refinement")
+                return
+
+            # Evaluate hypothesis status
+            decision = self._hypothesis_refiner.evaluate_hypothesis_status(
+                pydantic_hyp, latest_result, results_history
+            )
+
+            refined_ids = []
+            retired_ids = []
+
+            if decision == RetirementDecision.RETIRE:
+                self._hypothesis_refiner.retire_hypothesis(
+                    pydantic_hyp, rationale="Retirement based on result evaluation"
+                )
+                retired_ids.append(hypothesis_id)
+                logger.info(f"Retired hypothesis {hypothesis_id}")
+
+            elif decision == RetirementDecision.REFINE:
+                refined = self._hypothesis_refiner.refine_hypothesis(pydantic_hyp, latest_result)
+                if refined and refined.id:
+                    # Store refined hypothesis in DB
+                    try:
+                        with get_session() as session:
+                            db_create_hypothesis(
+                                session,
+                                id=refined.id,
+                                research_question=refined.research_question,
+                                statement=refined.statement,
+                                rationale=refined.rationale,
+                                domain=refined.domain,
+                                novelty_score=refined.novelty_score,
+                                testability_score=refined.testability_score,
+                            )
+                    except Exception as store_err:
+                        logger.warning(f"Failed to store refined hypothesis: {store_err}")
+                    refined_ids.append(refined.id)
+                    logger.info(f"Refined hypothesis {hypothesis_id} -> {refined.id}")
+
+            elif decision == RetirementDecision.SPAWN_VARIANT:
+                variants = self._hypothesis_refiner.spawn_variant(
+                    pydantic_hyp, latest_result, num_variants=2
+                )
+                for variant in variants:
+                    if variant and variant.id:
+                        try:
+                            with get_session() as session:
+                                db_create_hypothesis(
+                                    session,
+                                    id=variant.id,
+                                    research_question=variant.research_question,
+                                    statement=variant.statement,
+                                    rationale=variant.rationale,
+                                    domain=variant.domain,
+                                    novelty_score=variant.novelty_score,
+                                    testability_score=variant.testability_score,
+                                )
+                        except Exception as store_err:
+                            logger.warning(f"Failed to store variant hypothesis: {store_err}")
+                        refined_ids.append(variant.id)
+                logger.info(f"Spawned {len(refined_ids)} variants from {hypothesis_id}")
+
+            # decision == CONTINUE_TESTING: no action needed
+
+            # Track rollout
+            self.rollout_tracker.increment("hypothesis_refinement")
+
+            # Reset error streak on success
+            self._reset_error_streak()
+
+            # Add refined hypotheses to pool (thread-safe)
+            with self._research_plan_context():
+                for hyp_id in refined_ids:
+                    self.research_plan.add_hypothesis(hyp_id)
+
+            # Persist refined hypotheses to knowledge graph
+            for hyp_id in refined_ids:
+                self._persist_hypothesis_to_graph(hyp_id, agent_name="HypothesisRefiner")
+
+            # Update strategy stats (thread-safe)
+            with self._strategy_stats_context():
+                self.strategy_stats["hypothesis_refinement"]["attempts"] += 1
+                if refined_ids:
+                    self.strategy_stats["hypothesis_refinement"]["successes"] += 1
+
+            logger.info(f"Hypothesis refinement: {len(refined_ids)} refined, {len(retired_ids)} retired")
+
+        except Exception as e:
+            logger.error(f"Direct hypothesis refinement failed: {e}", exc_info=True)
+            self._handle_error_with_recovery(
+                error_source="HypothesisRefiner",
+                error_message=str(e),
+                recoverable=True,
+                error_details={
+                    "hypothesis_id": hypothesis_id,
+                    "tested_hypotheses": len(self.research_plan.tested_hypotheses),
+                }
+            )
 
     async def _send_to_convergence_detector(
         self,
@@ -1503,9 +2164,12 @@ Provide brief JSON response:
             logger.warning("Concurrent execution not enabled, falling back to sequential")
             results = []
             for protocol_id in protocol_ids:
-                # Sequential fallback
-                self._send_to_executor(protocol_id=protocol_id)
-                results.append({"protocol_id": protocol_id, "status": "queued"})
+                # Sequential fallback - use direct call (Issue #76)
+                import asyncio
+                asyncio.get_event_loop().run_until_complete(
+                    self._handle_execute_experiment_action(protocol_id=protocol_id)
+                )
+                results.append({"protocol_id": protocol_id, "status": "executed"})
             return results
 
         logger.info(f"Executing {len(protocol_ids)} experiments in parallel")
@@ -1907,7 +2571,7 @@ Provide a structured, actionable plan in 2-3 paragraphs.
     async def _do_execute_action(self, action: NextAction):
         """Internal async method to execute action (wrapped by stage tracking)."""
         if action == NextAction.GENERATE_HYPOTHESIS:
-            await self._send_to_hypothesis_generator(action="generate")
+            await self._handle_generate_hypothesis_action()
 
         elif action == NextAction.DESIGN_EXPERIMENT:
             # Get untested hypotheses
@@ -1934,26 +2598,26 @@ Provide a structured, actionable plan in 2-3 paragraphs.
                             # Process best candidate(s)
                             for eval_result in evaluations:
                                 if eval_result.get("recommendation") == "proceed":
-                                    await self._send_to_experiment_designer(
+                                    await self._handle_design_experiment_action(
                                         hypothesis_id=eval_result["hypothesis_id"]
                                     )
                                     break  # Design experiment for first promising hypothesis
                             else:
                                 # No promising hypotheses, design for first untested
-                                await self._send_to_experiment_designer(hypothesis_id=untested[0])
+                                await self._handle_design_experiment_action(hypothesis_id=untested[0])
                         else:
                             # Fallback to sequential
-                            await self._send_to_experiment_designer(hypothesis_id=untested[0])
+                            await self._handle_design_experiment_action(hypothesis_id=untested[0])
 
                     except asyncio.TimeoutError:
                         logger.warning("Hypothesis evaluation timed out, falling back to sequential")
-                        await self._send_to_experiment_designer(hypothesis_id=untested[0])
+                        await self._handle_design_experiment_action(hypothesis_id=untested[0])
                     except Exception as e:
                         logger.error(f"Concurrent hypothesis evaluation failed: {e}")
-                        await self._send_to_experiment_designer(hypothesis_id=untested[0])
+                        await self._handle_design_experiment_action(hypothesis_id=untested[0])
                 else:
                     # Sequential: design experiment for first untested hypothesis
-                    await self._send_to_experiment_designer(hypothesis_id=untested[0])
+                    await self._handle_design_experiment_action(hypothesis_id=untested[0])
 
         elif action == NextAction.EXECUTE_EXPERIMENT:
             # Get queued experiments
@@ -1970,9 +2634,9 @@ Provide a structured, actionable plan in 2-3 paragraphs.
                     logger.info(f"Executing {batch_size} experiments in parallel")
                     self.execute_experiments_batch(experiment_batch)
                 else:
-                    # Sequential: execute first queued experiment
+                    # Sequential: execute first queued experiment (Issue #76 direct call)
                     protocol_id = experiment_queue[0]
-                    await self._send_to_executor(protocol_id=protocol_id)
+                    await self._handle_execute_experiment_action(protocol_id=protocol_id)
 
         elif action == NextAction.ANALYZE_RESULT:
             # Get recent results
@@ -2001,25 +2665,25 @@ Provide a structured, actionable plan in 2-3 paragraphs.
                                 result_id = analysis.get("result_id")
                                 # Send to data analyst for full processing
                                 if result_id:
-                                    await self._send_to_data_analyst(result_id=result_id)
+                                    await self._handle_analyze_result_action(result_id=result_id)
                                     break  # Process one at a time in workflow
                         else:
                             # Fallback to sequential
                             result_id = results[-1]
-                            await self._send_to_data_analyst(result_id=result_id)
+                            await self._handle_analyze_result_action(result_id=result_id)
 
                     except asyncio.TimeoutError:
                         logger.warning("Result analysis timed out, falling back to sequential")
                         result_id = results[-1]
-                        await self._send_to_data_analyst(result_id=result_id)
+                        await self._handle_analyze_result_action(result_id=result_id)
                     except Exception as e:
                         logger.error(f"Concurrent result analysis failed: {e}")
                         result_id = results[-1]
-                        await self._send_to_data_analyst(result_id=result_id)
+                        await self._handle_analyze_result_action(result_id=result_id)
                 else:
                     # Sequential: analyze most recent result
                     result_id = results[-1]
-                    await self._send_to_data_analyst(result_id=result_id)
+                    await self._handle_analyze_result_action(result_id=result_id)
 
         elif action == NextAction.REFINE_HYPOTHESIS:
             # Refine most recently tested hypothesis
@@ -2028,9 +2692,8 @@ Provide a structured, actionable plan in 2-3 paragraphs.
 
             if tested:
                 hypothesis_id = tested[-1]
-                await self._send_to_hypothesis_refiner(
-                    hypothesis_id=hypothesis_id,
-                    action="evaluate"
+                await self._handle_refine_hypothesis_action(
+                    hypothesis_id=hypothesis_id
                 )
 
             # Increment iteration after completing refinement phase
@@ -2048,6 +2711,20 @@ Provide a structured, actionable plan in 2-3 paragraphs.
             logger.info(f"[CONVERGE] Checking convergence at iteration {self.research_plan.iteration_count}")
             await self._handle_convergence_action()
 
+        elif action == NextAction.ERROR_RECOVERY:
+            logger.info("[ERROR-RECOVERY] Attempting recovery from error state")
+            self._consecutive_errors = 0
+
+            # ERROR state can only transition to: INITIALIZING, GENERATING_HYPOTHESES, PAUSED
+            # So we always recover via GENERATING_HYPOTHESES — from there the normal
+            # decide_next_action() logic will route to the correct phase.
+            with self._workflow_context():
+                self.workflow.transition_to(
+                    WorkflowState.GENERATING_HYPOTHESES,
+                    action="Error recovery: resume research from hypothesis generation"
+                )
+                logger.info("[ERROR-RECOVERY] Transitioning to GENERATING_HYPOTHESES")
+
         elif action == NextAction.PAUSE:
             self.pause()
 
@@ -2061,6 +2738,14 @@ Provide a structured, actionable plan in 2-3 paragraphs.
         Returns:
             bool: True if convergence check is needed
         """
+        # Don't converge during active research phases where new work is being generated
+        if self.workflow.current_state in {
+            WorkflowState.DESIGNING_EXPERIMENTS,
+            WorkflowState.EXECUTING,
+            WorkflowState.ANALYZING,
+        }:
+            return False
+
         # Check iteration limit (mandatory)
         if self.research_plan.iteration_count >= self.research_plan.max_iterations:
             logger.info("Iteration limit reached")

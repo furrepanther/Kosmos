@@ -221,6 +221,44 @@ class ExperimentDesignerAgent(BaseAgent):
         if self.use_llm_enhancement and self.use_templates:
             protocol = self._enhance_protocol_with_llm(protocol, hypothesis)
 
+        # Step 4b: Power analysis — calculate required sample size
+        try:
+            from kosmos.experiments.statistical_power import PowerAnalyzer
+            power_analyzer = PowerAnalyzer()
+            for test_spec in protocol.statistical_tests:
+                expected_es = test_spec.expected_effect_size or 0.5
+                test_type_str = test_spec.test_type.value if hasattr(test_spec.test_type, 'value') else str(test_spec.test_type)
+                try:
+                    if 't_test' in test_type_str:
+                        required_n = power_analyzer.ttest_sample_size(
+                            effect_size=expected_es, power=test_spec.required_power, alpha=test_spec.alpha
+                        )
+                    elif 'correlation' in test_type_str:
+                        required_n = power_analyzer.correlation_sample_size(
+                            effect_size=expected_es, power=test_spec.required_power, alpha=test_spec.alpha
+                        )
+                    elif 'anova' in test_type_str:
+                        num_groups = len(test_spec.groups) if test_spec.groups else 3
+                        required_n = power_analyzer.anova_sample_size(
+                            effect_size=expected_es, num_groups=num_groups,
+                            power=test_spec.required_power, alpha=test_spec.alpha
+                        )
+                    else:
+                        required_n = None
+
+                    if required_n and (not protocol.sample_size or required_n > protocol.sample_size):
+                        protocol.sample_size = required_n
+                        protocol.sample_size_rationale = (
+                            f"Power analysis: n={required_n} for {test_type_str} "
+                            f"(effect_size={expected_es}, power={test_spec.required_power}, alpha={test_spec.alpha})"
+                        )
+                        protocol.power_analysis_performed = True
+                        logger.info(f"Power analysis: updated sample_size to {required_n}")
+                except Exception as pa_err:
+                    logger.warning(f"Power analysis failed for {test_type_str}: {pa_err}")
+        except ImportError:
+            logger.warning("PowerAnalyzer unavailable, skipping power analysis")
+
         # Step 5: Validate protocol
         validation_result = self._validate_protocol(protocol)
 
@@ -320,6 +358,14 @@ class ExperimentDesignerAgent(BaseAgent):
                 raise ValueError(f"Hypothesis {hypothesis_id} not found in database")
 
             # Convert to Pydantic model
+            # priority_score may not exist in DB schema; derive from available scores
+            priority = getattr(db_hypothesis, 'priority_score', None)
+            if priority is None:
+                # Derive from testability + novelty (equally weighted)
+                t = db_hypothesis.testability_score or 0.5
+                n = db_hypothesis.novelty_score or 0.5
+                priority = (t + n) / 2.0
+
             return Hypothesis(
                 id=db_hypothesis.id,
                 research_question=db_hypothesis.research_question,
@@ -328,7 +374,7 @@ class ExperimentDesignerAgent(BaseAgent):
                 domain=db_hypothesis.domain or "general",
                 testability_score=db_hypothesis.testability_score,
                 novelty_score=db_hypothesis.novelty_score,
-                priority_score=db_hypothesis.priority_score,
+                priority_score=priority,
             )
 
     def _select_experiment_type(
@@ -496,11 +542,23 @@ class ExperimentDesignerAgent(BaseAgent):
         variables = {}
         for var_name, var_data in data.get("variables", {}).items():
             if isinstance(var_data, dict):
+                # Coerce values to list — LLMs sometimes return description
+                # strings like "Variable (from dataset)" instead of lists
+                raw_values = var_data.get("values")
+                if raw_values is None:
+                    coerced_values = None
+                elif isinstance(raw_values, list):
+                    coerced_values = raw_values
+                elif isinstance(raw_values, str):
+                    coerced_values = None  # Description strings aren't usable as values
+                else:
+                    coerced_values = [raw_values]  # Single scalar value
+
                 variables[var_name] = Variable(
                     name=var_name,
                     type=VariableType(var_data.get("type", "independent")),
                     description=var_data.get("description", f"Variable: {var_name}"),
-                    values=var_data.get("values"),
+                    values=coerced_values,
                     fixed_value=var_data.get("fixed_value"),
                     unit=var_data.get("unit"),
                     measurement_method=var_data.get("measurement_method"),

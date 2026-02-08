@@ -205,24 +205,26 @@ class Entity:
         }
 
         # Add scores if present
-        if hypothesis.testability_score is not None:
+        if hasattr(hypothesis, 'testability_score') and hypothesis.testability_score is not None:
             properties["testability_score"] = hypothesis.testability_score
-        if hypothesis.novelty_score is not None:
+        if hasattr(hypothesis, 'novelty_score') and hypothesis.novelty_score is not None:
             properties["novelty_score"] = hypothesis.novelty_score
-        if hypothesis.confidence_score is not None:
+        if hasattr(hypothesis, 'confidence_score') and hypothesis.confidence_score is not None:
             properties["confidence_score"] = hypothesis.confidence_score
-        if hypothesis.priority_score is not None:
+        if hasattr(hypothesis, 'priority_score') and hypothesis.priority_score is not None:
             properties["priority_score"] = hypothesis.priority_score
 
-        # Add evolution tracking
-        if hypothesis.parent_hypothesis_id:
-            properties["parent_hypothesis_id"] = hypothesis.parent_hypothesis_id
-        properties["generation"] = hypothesis.generation
-        properties["refinement_count"] = hypothesis.refinement_count
+        # Add evolution tracking (use getattr for SQLAlchemy compatibility)
+        parent_id = getattr(hypothesis, 'parent_hypothesis_id', None)
+        if parent_id:
+            properties["parent_hypothesis_id"] = parent_id
+        properties["generation"] = getattr(hypothesis, 'generation', 0)
+        properties["refinement_count"] = getattr(hypothesis, 'refinement_count', 0)
 
         # Add related papers
-        if hypothesis.related_papers:
-            properties["related_papers"] = hypothesis.related_papers
+        related = getattr(hypothesis, 'related_papers', None)
+        if related:
+            properties["related_papers"] = related
 
         return cls(
             id=hypothesis.id,
@@ -252,12 +254,12 @@ class Entity:
             entity = Entity.from_protocol(protocol, created_by="ExperimentDesignerAgent")
         """
         properties = {
-            "name": protocol.name,
-            "hypothesis_id": protocol.hypothesis_id,
-            "experiment_type": protocol.experiment_type.value if hasattr(protocol.experiment_type, 'value') else str(protocol.experiment_type),
-            "domain": protocol.domain,
-            "description": protocol.description,
-            "objective": protocol.objective,
+            "name": getattr(protocol, 'name', 'unnamed'),
+            "hypothesis_id": getattr(protocol, 'hypothesis_id', ''),
+            "experiment_type": protocol.experiment_type.value if hasattr(protocol.experiment_type, 'value') else str(getattr(protocol, 'experiment_type', 'unknown')),
+            "domain": getattr(protocol, 'domain', ''),
+            "description": getattr(protocol, 'description', ''),
+            "objective": getattr(protocol, 'objective', ''),
         }
 
         # Add rigor score if present
@@ -298,10 +300,15 @@ class Entity:
             result = ExperimentResult(experiment_id="...", protocol_id="...", ...)
             entity = Entity.from_result(result, created_by="Executor")
         """
+        status = getattr(result, 'status', 'unknown')
+        if hasattr(status, 'value'):
+            status = status.value
+        else:
+            status = str(status)
         properties = {
-            "experiment_id": result.experiment_id,
-            "protocol_id": result.protocol_id,
-            "status": result.status.value if hasattr(result.status, 'value') else str(result.status),
+            "experiment_id": getattr(result, 'experiment_id', ''),
+            "protocol_id": getattr(result, 'protocol_id', getattr(result, 'experiment_id', '')),
+            "status": status,
         }
 
         # Add hypothesis link if present

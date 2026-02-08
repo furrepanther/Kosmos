@@ -259,6 +259,112 @@ class TestEntity:
         assert restored.verified == original.verified
 
 
+class TestEntityFromHypothesis:
+    """Test Entity.from_hypothesis with both Pydantic and plain objects (D4 fix)."""
+
+    def test_from_hypothesis_with_pydantic_model(self):
+        """Test Entity.from_hypothesis with a full Pydantic hypothesis."""
+        from kosmos.models.hypothesis import Hypothesis
+        hyp = Hypothesis(
+            research_question="Does X affect Y?",
+            statement="X increases Y significantly",
+            rationale="Prior studies suggest correlation",
+            domain="biology",
+        )
+        entity = Entity.from_hypothesis(hyp)
+        assert entity.type == "Hypothesis"
+        assert entity.properties["statement"] == "X increases Y significantly"
+        assert entity.properties["generation"] == 1  # Pydantic default is 1
+        assert entity.properties["refinement_count"] == 0
+
+    def test_from_hypothesis_with_plain_object(self):
+        """Test Entity.from_hypothesis with a plain object missing optional attrs."""
+        class FakeHypothesis:
+            id = "hyp-123"
+            research_question = "Does X affect Y?"
+            statement = "X affects Y"
+            rationale = "Theory suggests it"
+            domain = "chemistry"
+            status = type('Status', (), {'value': 'active'})()
+            confidence_score = 0.8
+            created_at = None
+            updated_at = None
+            # Deliberately missing: parent_hypothesis_id, generation,
+            # refinement_count, related_papers
+
+        entity = Entity.from_hypothesis(FakeHypothesis())
+        assert entity.type == "Hypothesis"
+        assert entity.properties["statement"] == "X affects Y"
+        assert entity.properties["generation"] == 0
+        assert entity.properties["refinement_count"] == 0
+        assert "parent_hypothesis_id" not in entity.properties
+
+    def test_from_hypothesis_with_parent_id(self):
+        """Test Entity.from_hypothesis preserves parent_hypothesis_id when present."""
+        from kosmos.models.hypothesis import Hypothesis
+        hyp = Hypothesis(
+            research_question="Follow-up question",
+            statement="Refined statement",
+            rationale="Based on prior evidence",
+            domain="physics",
+            parent_hypothesis_id="hyp-parent-001",
+            generation=2,
+            refinement_count=1,
+        )
+        entity = Entity.from_hypothesis(hyp)
+        assert entity.properties["parent_hypothesis_id"] == "hyp-parent-001"
+        assert entity.properties["generation"] == 2
+        assert entity.properties["refinement_count"] == 1
+
+
+class TestEntityFromResult:
+    """Test Entity.from_result with both Pydantic and plain objects (D5 fix)."""
+
+    def test_from_result_with_plain_object(self):
+        """Test Entity.from_result with a plain object missing optional attrs."""
+        class FakeResult:
+            id = "result-456"
+            experiment_id = "exp-789"
+            # Deliberately missing: protocol_id, status
+            created_at = None
+            updated_at = None
+
+        entity = Entity.from_result(FakeResult())
+        assert entity.type == "ExperimentResult"
+        assert entity.properties["experiment_id"] == "exp-789"
+        # protocol_id should fall back to experiment_id
+        assert entity.properties["protocol_id"] == "exp-789"
+        # status should fall back to 'unknown'
+        assert entity.properties["status"] == "unknown"
+
+    def test_from_result_with_enum_status(self):
+        """Test Entity.from_result with enum-style status."""
+        class FakeResult:
+            id = "result-789"
+            experiment_id = "exp-001"
+            protocol_id = "proto-001"
+            status = type('Status', (), {'value': 'SUCCESS'})()
+            created_at = None
+            updated_at = None
+
+        entity = Entity.from_result(FakeResult())
+        assert entity.properties["status"] == "SUCCESS"
+        assert entity.properties["protocol_id"] == "proto-001"
+
+    def test_from_result_with_string_status(self):
+        """Test Entity.from_result with string status (no .value)."""
+        class FakeResult:
+            id = "result-abc"
+            experiment_id = "exp-002"
+            protocol_id = "proto-002"
+            status = "COMPLETED"
+            created_at = None
+            updated_at = None
+
+        entity = Entity.from_result(FakeResult())
+        assert entity.properties["status"] == "COMPLETED"
+
+
 class TestRelationship:
     """Test Relationship model."""
 

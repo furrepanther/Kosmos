@@ -202,6 +202,15 @@ class NoveltyChecker:
             )
 
             logger.info(f"Found {len(papers)} similar papers via keyword search")
+
+            # Index retrieved papers into vector DB for future semantic searches
+            if papers and self.vector_db:
+                try:
+                    self.vector_db.add_papers(papers)
+                    logger.info(f"Indexed {len(papers)} papers into vector DB")
+                except Exception as e:
+                    logger.warning(f"Failed to index papers into vector DB: {e}")
+
             return papers
 
         except Exception as e:
@@ -334,8 +343,8 @@ class NoveltyChecker:
             hyp_text = f"{hypothesis.statement}. {hypothesis.rationale}"
             paper_text = f"{paper_title}. {paper_abstract}"
 
-            hyp_embedding = self.embedder.embed_text(hyp_text)
-            paper_embedding = self.embedder.embed_text(paper_text)
+            hyp_embedding = self.embedder.embed_query(hyp_text)
+            paper_embedding = self.embedder.embed_query(paper_text)
 
             # Cosine similarity
             similarity = np.dot(hyp_embedding, paper_embedding) / (
@@ -372,8 +381,8 @@ class NoveltyChecker:
             text1 = f"{hyp1.statement}. {hyp1.rationale}"
             text2 = f"{hyp2.statement}. {hyp2.rationale}"
 
-            emb1 = self.embedder.embed_text(text1)
-            emb2 = self.embedder.embed_text(text2)
+            emb1 = self.embedder.embed_query(text1)
+            emb2 = self.embedder.embed_query(text2)
 
             similarity = np.dot(emb1, emb2) / (
                 np.linalg.norm(emb1) * np.linalg.norm(emb2)
