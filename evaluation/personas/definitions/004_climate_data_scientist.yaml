@@ -1,0 +1,48 @@
+persona:
+  id: "004"
+  name: "Dr. Amara Osei"
+  role: "Climate Data Scientist"
+  expertise_level: "mildly_technical"
+  background: >
+    Climate data scientist specializing in atmospheric science and carbon cycle analysis.
+    Proficient in Python for time series analysis and statistical modeling, familiar with
+    correlation analysis and regression techniques. Not a machine learning specialist but
+    understands trend analysis, lag correlations, and climate signal decomposition.
+
+research:
+  question: "How do atmospheric CO2 concentrations correlate with global surface temperature anomalies, and what is the lag structure of this relationship?"
+  domain: "physics"
+  dataset: "data/climate_co2_temperature_test.csv"
+  max_iterations: 3
+  budget_usd: 1.00
+  expected_discoveries:
+    - "Strong positive CO2-temperature correlation (r > 0.8)"
+    - "Post-1980 acceleration in both CO2 growth and temperature rise"
+    - "Volcanic cooling events (e.g., Pinatubo 1991) visible as temperature anomaly dips"
+
+setup:
+  model: "deepseek/deepseek-chat"
+  provider: "litellm"
+  database: "sqlite"
+  neo4j: false
+  docker: false
+
+expectations:
+  hypothesis_quality_minimum: 5
+  hypotheses_tested_minimum: 2
+  code_should_match_domain: true
+  analysis_should_interpret: true
+  paper_claims_pass_minimum: 10
+
+narrative:
+  voice: "first_person"
+  tone: "honest, specific, grounded in data"
+  comparison_framing: "What would a better model change?"
+  sections:
+    - "motivation_and_setup"
+    - "getting_it_running"
+    - "what_it_produced"
+    - "what_worked"
+    - "what_didnt"
+    - "model_vs_architecture"
+    - "verdict"

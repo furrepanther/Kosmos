@@ -464,8 +464,9 @@ async def run_phase3_multi_iteration(research_question: str = None, domain: str 
         plan = director.generate_research_plan()
         director.start()
 
-        # Run loop
-        max_total_actions = 60  # Safety limit
+        # Run loop - scale safety limit with max_iterations
+        configured_max = max_iterations or 3
+        max_total_actions = max(60, configured_max * 10)
         action_count = 0
         iteration_snapshots = []
         phases_seen = set()

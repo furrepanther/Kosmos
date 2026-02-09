@@ -6,6 +6,7 @@ Note: The arxiv package may have compatibility issues with Python 3.11+
 due to sgmllib3k dependency. This module automatically falls back to
 ArxivHTTPClient which uses direct HTTP API calls without the problematic dependency.
 """
+from __future__ import annotations
 
 from typing import List, Optional
 from datetime import datetime
