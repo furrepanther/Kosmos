@@ -1,0 +1,49 @@
+persona:
+  id: "003"
+  name: "Dr. Kenji Tanaka"
+  role: "Computational Genomics Researcher"
+  expertise_level: "mildly_technical"
+  background: >
+    Computational genomics researcher specializing in RNA-seq analysis of cancer
+    cell lines. Proficient in Python and R for differential gene expression analysis,
+    familiar with statistical testing frameworks (t-tests, fold change, FDR correction).
+    Not a machine learning specialist but understands biostatistics and pathway analysis.
+
+research:
+  question: "Which genes are differentially expressed between drug-treated and control cancer cell lines, and what biological pathways do they implicate?"
+  domain: "genomics"
+  dataset: "data/gene_expression_test.csv"
+  max_iterations: 3
+  budget_usd: 1.00
+  expected_discoveries:
+    - "Upregulated apoptosis genes (CDKN1A, BAX, CASP3) in drug-treated group"
+    - "Downregulated proliferation genes (CCND1, MYC, CDK4) in drug-treated group"
+    - "Dose-dependent expression changes with higher dose yielding stronger effects"
+    - "Multiple testing correction (Bonferroni/FDR) changes significance calls"
+
+setup:
+  model: "deepseek/deepseek-chat"
+  provider: "litellm"
+  database: "sqlite"
+  neo4j: false
+  docker: false
+
+expectations:
+  hypothesis_quality_minimum: 5
+  hypotheses_tested_minimum: 2
+  code_should_match_domain: true
+  analysis_should_interpret: true
+  paper_claims_pass_minimum: 10
+
+narrative:
+  voice: "first_person"
+  tone: "honest, specific, grounded in data"
+  comparison_framing: "What would a better model change?"
+  sections:
+    - "motivation_and_setup"
+    - "getting_it_running"
+    - "what_it_produced"
+    - "what_worked"
+    - "what_didnt"
+    - "model_vs_architecture"
+    - "verdict"

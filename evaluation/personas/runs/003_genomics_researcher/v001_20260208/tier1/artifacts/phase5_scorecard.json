@@ -1,0 +1,120 @@
+{
+  "phase": "Phase 5: Scientific Rigor Scorecard",
+  "timestamp": "2026-02-06T22:10:00Z",
+  "methodology": "Each dimension scored based on code review evidence and component test results",
+  "dimensions": {
+    "hypothesis_quality": {
+      "weight": 0.20,
+      "score": 4.5,
+      "max": 10,
+      "evidence": {
+        "testability": "Regex-based scoring works. Threshold 0.3 is very permissive. Scores observed: 0.7-0.95",
+        "specificity": "Min 15 chars is too low. LLM generates specific hypotheses (measurable predictions) but no enforcement",
+        "novelty": "NoveltyChecker exists (250+ lines) with semantic similarity + literature search BUT never called from agents/hypothesis_generator.py or agents/research_director.py. novelty_score always None from generator",
+        "literature_grounding": "Literature search works (5 papers returned, S2+arXiv+PubMed). Papers used in prompt context when use_literature_context=True, but keyword-based not semantic"
+      },
+      "gap_notes": [
+        "NoveltyChecker dead in runtime path (kosmos/hypothesis/novelty_checker.py)",
+        "require_novelty_check config exists but never checked (hypothesis_generator.py:82)",
+        "novelty_score set by LLM, not by dedicated analyzer"
+      ]
+    },
+    "experimental_design": {
+      "weight": 0.25,
+      "score": 3.0,
+      "max": 10,
+      "evidence": {
+        "controls": "Inline _validate_protocol() checks exist (experiment_designer.py:625-661) but generate warnings only, don't block execution",
+        "power_analysis": "PowerAnalyzer exists (525 lines) with t-test/ANOVA/correlation/regression/chi-square BUT never called from experiment_designer.py. require_power_analysis config set but unused",
+        "test_selection": "check_assumptions() exists in statistics.py BUT never called during execution",
+        "confounds": "Not implemented. No confound detection system",
+        "protocol_quality": "Experiment designer fell back to LLM and produced unnamed protocol with 0 steps, no controls, no stats in Phase 2 test"
+      },
+      "gap_notes": [
+        "ExperimentValidator dead in runtime path (kosmos/experiments/validator.py)",
+        "PowerAnalyzer dead in runtime path (kosmos/experiments/statistical_power.py)",
+        "Inline validator is 37 lines vs comprehensive validator's ~500 lines",
+        "Experiment design produced empty protocol in component test"
+      ]
+    },
+    "data_handling": {
+      "weight": 0.15,
+      "score": 3.0,
+      "max": 10,
+      "evidence": {
+        "provenance": "CodeProvenance system exists with hyperlinks. _data_source variable set in templates",
+        "quality": "Only dropna() - no outlier detection, no range checks, no missing data imputation",
+        "synthetic_disclosure": "_data_source set to 'synthetic' in generated code BUT NOT propagated to ExperimentResult or reports",
+        "data_input": "NO --data-path CLI flag. NO DataProvider.load_user_data(). Paper's core workflow (objective + dataset) completely unsupported",
+        "effect_size": "Hardcoded 0.5 in TTestComparisonCodeTemplate (code_generator.py:112). Guarantees significant results"
+      },
+      "gap_notes": [
+        "No dataset input mechanism - paper's CORE innovation is missing",
+        "Synthetic data always effect_size=0.5 creating circular validation",
+        "_data_source not returned in execution results",
+        "Reports cannot distinguish synthetic from real data"
+      ]
+    },
+    "statistical_analysis": {
+      "weight": 0.20,
+      "score": 4.5,
+      "max": 10,
+      "evidence": {
+        "test_correctness": "StatisticalValidator has t-test, ANOVA, chi-square, correlation, Mann-Whitney. check_assumptions() exists but never called in runtime",
+        "multiple_comparison": "Bonferroni, Benjamini-Hochberg, Holm-Bonferroni methods exist in statistics.py BUT not auto-applied across research loop",
+        "effect_sizes": "Cohen's d calculated in templates. Hardcoded thresholds: small<0.3, medium<0.8, large>=0.8",
+        "confidence_intervals": "Parametric CI method exists. Inconsistently called",
+        "code_template_bug": "TTestComparisonCodeTemplate produces code that fails with NameError: name 'df' is not defined"
+      },
+      "gap_notes": [
+        "check_assumptions() defined but never called (statistics.py:586-639)",
+        "Multiple comparison correction not applied across research loop iterations",
+        "Code template bug makes execution fail"
+      ]
+    },
+    "interpretation_quality": {
+      "weight": 0.10,
+      "score": 4.0,
+      "max": 10,
+      "evidence": {
+        "claims_match_evidence": "supports_hypothesis determined by LLM interpretation (data_analyst.py:326), not formal criteria. Result collector has formal check (p<0.05 AND |d|>0.2) but it's a SEPARATE code path",
+        "limitations": "LLM generates limitation text, but it's generic boilerplate not experiment-specific",
+        "overclaiming": "No overclaiming detector. LLM set hypothesis_supported=True with confidence=0.85 in Phase 2 test",
+        "anomaly_detection": "Anomaly detection config exists (anomaly_detection_enabled=True) but Phase 2 anomaly test not run due to time constraints"
+      },
+      "gap_notes": [
+        "LLM can affirm synthetic data results (circular reasoning)",
+        "No formal overclaiming prevention",
+        "Two parallel systems for supports_hypothesis (LLM-based and formal) not reconciled"
+      ]
+    },
+    "reproducibility": {
+      "weight": 0.10,
+      "score": 5.0,
+      "max": 10,
+      "evidence": {
+        "code_traceability": "CodeProvenance works well for template-generated code (hyperlinks, citations)",
+        "seeds": "default_random_seed=42 in config. ReproducibilityManager.set_seed() method exists. Multiple independent seed paths not synchronized",
+        "environment": "ReproducibilityManager captures comprehensive environment info",
+        "replication": "test_determinism() exists but never called from workflow. Would enable multi-run consistency testing",
+        "config_issue": "LITELLM_MODEL env var not loaded by config system - defaults to gpt-3.5-turbo despite deepseek in .env"
+      },
+      "gap_notes": [
+        "test_determinism() dead code in workflow",
+        "Config env var loading bug means model selection is unreliable",
+        "Multiple seed paths not synchronized"
+      ]
+    }
+  },
+  "weighted_scores": {
+    "hypothesis_quality": 0.9,
+    "experimental_design": 0.75,
+    "data_handling": 0.45,
+    "statistical_analysis": 0.9,
+    "interpretation_quality": 0.4,
+    "reproducibility": 0.5,
+    "total": 3.9,
+    "max_possible": 10.0,
+    "percentage": 39.0
+  }
+}

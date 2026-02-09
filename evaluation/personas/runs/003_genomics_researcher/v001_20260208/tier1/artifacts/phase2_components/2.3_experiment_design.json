@@ -1,0 +1,23 @@
+{
+  "count": 1,
+  "protocols": [
+    {
+      "name": "unnamed",
+      "has_steps": false,
+      "step_count": 0,
+      "has_variables": false,
+      "has_controls": false,
+      "has_statistical_tests": false,
+      "experiment_type": "unknown"
+    }
+  ],
+  "power_analyzer_integrated": false,
+  "experiment_validator_integrated": false,
+  "gap_notes": [
+    "PowerAnalyzer exists but never called by designer",
+    "ExperimentValidator exists but never imported by designer",
+    "Inline _validate_protocol() used instead (~37 lines vs ~500 line validator)"
+  ],
+  "status": "PASS",
+  "duration_seconds": 95.63
+}

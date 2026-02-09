@@ -1,0 +1,16 @@
+{
+  "persona_id": "003",
+  "persona_name": "Dr. Kenji Tanaka",
+  "version": "v001",
+  "timestamp": "2026-02-08T19:36:58.230626",
+  "model": "deepseek/deepseek-chat",
+  "provider": "litellm",
+  "kosmos_git_sha": "099764dee7f2",
+  "config_hash": "sha256:046fcbcb644068d2",
+  "tier1_completed": true,
+  "tier2_completed": false,
+  "tier3_completed": false,
+  "checks_passed": 37,
+  "checks_total": 37,
+  "duration_seconds": 8.8
+}
