@@ -26,7 +26,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -965,8 +965,8 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
                     # Estimate: 500 bytes/node + 200 bytes/relationship + 20% overhead
                     estimated_bytes = (nodes * 500 + rels * 200) * 1.2
                     return round(estimated_bytes / (1024 * 1024), 2)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Neo4j storage size estimation query failed: {e}")
 
         except Exception as e:
             logger.debug(f"Could not determine Neo4j storage size: {e}")
@@ -1062,7 +1062,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
         ann_dict = {
             'text': annotation.text,
             'created_by': annotation.created_by,
-            'created_at': (annotation.created_at or datetime.utcnow()).isoformat(),
+            'created_at': (annotation.created_at or datetime.now(timezone.utc)).isoformat(),
             'annotation_id': str(uuid.uuid4())  # Unique ID for each annotation
         }
 
@@ -1083,7 +1083,7 @@ class Neo4jWorldModel(WorldModelStorage, EntityManager):
                 query,
                 entity_id=entity_id,
                 annotation=json.dumps(ann_dict),
-                updated_at=datetime.utcnow().isoformat()
+                updated_at=datetime.now(timezone.utc).isoformat()
             ).data()
 
             if result and result[0]['updated'] > 0:

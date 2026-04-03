@@ -15,7 +15,7 @@ import logging.handlers
 import json
 import sys
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from enum import Enum
 
@@ -49,7 +49,7 @@ class JSONFormatter(logging.Formatter):
             str: JSON formatted log
         """
         log_data = {
-            "timestamp": datetime.utcfromtimestamp(record.created).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -278,7 +278,7 @@ class ExperimentLogger:
 
     def start(self):
         """Log experiment start."""
-        self.start_time = datetime.utcnow()
+        self.start_time = datetime.now(timezone.utc)
         self.logger.info(f"Experiment {self.experiment_id} started", extra={
             "experiment_id": self.experiment_id,
             "event": "start",
@@ -290,7 +290,7 @@ class ExperimentLogger:
         event = {
             "event": "hypothesis",
             "hypothesis": hypothesis,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self.events.append(event)
         self.logger.info(f"Hypothesis: {hypothesis}", extra={
@@ -303,7 +303,7 @@ class ExperimentLogger:
         event = {
             "event": "experiment_design",
             "design": design,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self.events.append(event)
         self.logger.info("Experiment design created", extra={
@@ -315,7 +315,7 @@ class ExperimentLogger:
         """Log execution start."""
         event = {
             "event": "execution_start",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self.events.append(event)
         self.logger.info("Execution started", extra={
@@ -328,7 +328,7 @@ class ExperimentLogger:
         event = {
             "event": "result",
             "result": result,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self.events.append(event)
         self.logger.info("Result obtained", extra={
@@ -341,7 +341,7 @@ class ExperimentLogger:
         event = {
             "event": "error",
             "error": error,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
         self.events.append(event)
         self.logger.error(f"Error: {error}", extra={
@@ -356,7 +356,7 @@ class ExperimentLogger:
         Args:
             status: Final status (success, failure, error)
         """
-        self.end_time = datetime.utcnow()
+        self.end_time = datetime.now(timezone.utc)
         duration = (self.end_time - self.start_time).total_seconds() if self.start_time else 0
 
         self.logger.info(f"Experiment {self.experiment_id} ended: {status}", extra={

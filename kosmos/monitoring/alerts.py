@@ -11,7 +11,7 @@ import threading
 import time
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ class Alert:
     name: str
     severity: AlertSeverity
     message: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     status: AlertStatus = AlertStatus.ACTIVE
     details: Dict[str, Any] = field(default_factory=dict)
     alert_id: Optional[str] = None
@@ -83,7 +83,7 @@ class AlertRule:
         # Check cooldown
         if self.last_triggered:
             cooldown_end = self.last_triggered + timedelta(seconds=self.cooldown_seconds)
-            if datetime.utcnow() < cooldown_end:
+            if datetime.now(timezone.utc) < cooldown_end:
                 return False
 
         # Check condition
@@ -103,7 +103,7 @@ class AlertRule:
         Returns:
             Alert instance
         """
-        self.last_triggered = datetime.utcnow()
+        self.last_triggered = datetime.now(timezone.utc)
         return Alert(
             name=self.name,
             severity=self.severity,

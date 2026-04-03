@@ -33,8 +33,8 @@ def get_git_sha() -> Optional[str]:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Git commit hash retrieval failed: {e}")
     return None
 
 

@@ -14,7 +14,7 @@ Async Architecture (Issue #66 fix):
 from typing import Dict, List, Optional, Type, Any
 from kosmos.agents.base import BaseAgent, AgentMessage, AgentStatus
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 
@@ -462,7 +462,7 @@ class AgentRegistry:
             "unhealthy_agents": total_agents - healthy_agents,
             "agent_health": agent_health,
             "message_history_size": len(self._message_history),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     def get_agent_statistics(self) -> Dict[str, Any]:

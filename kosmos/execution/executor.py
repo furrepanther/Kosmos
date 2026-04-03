@@ -532,8 +532,8 @@ class CodeExecutor:
                 try:
                     profiler._stop_profiling()
                     profile_result = profiler.get_result()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Profiler stop/result retrieval failed: {e}")
 
             execution_time = time.time() - start_time
 
@@ -1036,6 +1036,28 @@ def execute_protocol_code(
     Returns:
         Dictionary with execution results
     """
+    # Check SafetyGuardrails emergency stop before execution
+    try:
+        from kosmos.safety.guardrails import SafetyGuardrails
+        guardrails = SafetyGuardrails()
+        guardrails.sync_from_flag_file()
+        if guardrails.is_emergency_stop_active():
+            return {
+                'success': False,
+                'error': 'Emergency stop is active',
+                'validation_errors': [f"Emergency stop: {guardrails.emergency_stop.reason}"],
+                'validation_warnings': []
+            }
+        # Use guardrails-enforced resource limits for sandbox config
+        if use_sandbox and sandbox_config is None:
+            enforced_limits = guardrails.enforce_resource_limits()
+            sandbox_config = {
+                'memory_limit_mb': enforced_limits.max_memory_mb,
+                'timeout_seconds': enforced_limits.max_execution_time_seconds,
+            }
+    except ImportError:
+        logger.debug("SafetyGuardrails not available, proceeding without guardrails")
+
     # Always validate code safety (F-21)
     validator = CodeValidator(allow_file_read=True)
     report = validator.validate(code)

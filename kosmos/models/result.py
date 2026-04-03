@@ -8,7 +8,7 @@ with validation and structured data handling.
 from pydantic import BaseModel, Field, field_validator
 from kosmos.utils.compat import model_to_dict
 from typing import Dict, List, Optional, Any, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import json
 
@@ -200,8 +200,8 @@ class ExperimentResult(BaseModel):
     )
 
     # Timestamps
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Result creation time")
-    updated_at: datetime = Field(default_factory=datetime.utcnow, description="Last update time")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Result creation time")
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Last update time")
 
     @field_validator('statistical_tests')
     @classmethod

@@ -174,8 +174,8 @@ class AnthropicProvider(LLMProvider):
                 from kosmos.config import get_config
                 config = get_config()
                 log_llm = config.logging.log_llm_calls
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Config loading for LLM call logging failed: {e}")
 
             # Model selection logic
             selected_model = self.model
@@ -413,8 +413,8 @@ class AnthropicProvider(LLMProvider):
                         "[LLM] Anthropic async: model=%s, in=%d, out=%d, duration=%.2fs",
                         self.model, input_tokens, output_tokens, duration
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"Anthropic call logging failed: {e}")
 
             return LLMResponse(
                 content=content,

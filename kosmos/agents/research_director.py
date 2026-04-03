@@ -13,7 +13,7 @@ Async Architecture (Issue #66 fix):
 """
 
 from typing import Dict, Any, Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import asyncio
 import concurrent.futures
@@ -625,7 +625,7 @@ class ResearchDirectorAgent(BaseAgent):
         # Update error tracking
         self.errors_encountered += 1
         self._consecutive_errors += 1
-        self._last_error_time = datetime.utcnow()
+        self._last_error_time = datetime.now(timezone.utc)
 
         # Record in error history
         error_record = {
@@ -1080,7 +1080,7 @@ class ResearchDirectorAgent(BaseAgent):
         self.pending_requests[message.id] = {
             "agent": "HypothesisGeneratorAgent",
             "action": action,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Track rollout (Issue #58)
@@ -1114,7 +1114,7 @@ class ResearchDirectorAgent(BaseAgent):
         self.pending_requests[message.id] = {
             "agent": "ExperimentDesignerAgent",
             "hypothesis_id": hypothesis_id,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Track rollout (Issue #58)
@@ -1150,7 +1150,7 @@ class ResearchDirectorAgent(BaseAgent):
         self.pending_requests[message.id] = {
             "agent": "Executor",
             "protocol_id": protocol_id,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Track rollout (Issue #58)
@@ -1184,7 +1184,7 @@ class ResearchDirectorAgent(BaseAgent):
         self.pending_requests[message.id] = {
             "agent": "DataAnalystAgent",
             "result_id": result_id,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Track rollout (Issue #58)
@@ -1219,7 +1219,7 @@ class ResearchDirectorAgent(BaseAgent):
         self.pending_requests[message.id] = {
             "agent": "HypothesisRefiner",
             "hypothesis_id": hypothesis_id,
-            "timestamp": datetime.utcnow()
+            "timestamp": datetime.now(timezone.utc)
         }
 
         # Track rollout - refinement is part of hypothesis lifecycle (Issue #58)
@@ -1710,7 +1710,7 @@ class ResearchDirectorAgent(BaseAgent):
                 # Build minimal ExperimentResult from DB fields
                 import sys as _sys
                 import platform as _platform
-                _now = datetime.utcnow()
+                _now = datetime.now(timezone.utc)
                 pydantic_result = ExperimentResult(
                     id=db_result.id,
                     experiment_id=db_result.experiment_id,
@@ -1857,7 +1857,7 @@ class ResearchDirectorAgent(BaseAgent):
                             try:
                                 import sys as _sys
                                 import platform as _platform
-                                _now = datetime.utcnow()
+                                _now = datetime.now(timezone.utc)
                                 pydantic_r = ExperimentResult(
                                     id=db_r.id,
                                     experiment_id=db_r.experiment_id,
@@ -2177,10 +2177,17 @@ Provide brief JSON response:
             results = []
             for protocol_id in protocol_ids:
                 # Sequential fallback - use direct call (Issue #76)
-                import asyncio
-                asyncio.get_event_loop().run_until_complete(
-                    self._handle_execute_experiment_action(protocol_id=protocol_id)
-                )
+                try:
+                    loop = asyncio.get_running_loop()
+                    future = asyncio.run_coroutine_threadsafe(
+                        self._handle_execute_experiment_action(protocol_id=protocol_id),
+                        loop
+                    )
+                    future.result(timeout=600)
+                except RuntimeError:
+                    asyncio.run(
+                        self._handle_execute_experiment_action(protocol_id=protocol_id)
+                    )
                 results.append({"protocol_id": protocol_id, "status": "executed"})
             return results
 

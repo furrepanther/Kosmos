@@ -14,7 +14,7 @@ import time
 import logging
 import asyncio
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import typer
@@ -285,7 +285,7 @@ async def run_with_progress_async(
 
         table.add_row("Workflow State", create_status_text(state))
         table.add_row("Iteration", f"{iteration}/{max_iterations}")
-        table.add_row("Started", format_timestamp(datetime.utcnow()))
+        table.add_row("Started", format_timestamp(datetime.now(timezone.utc)))
 
         return table
 

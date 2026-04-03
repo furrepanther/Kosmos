@@ -7,7 +7,7 @@ Complements the SQLAlchemy Experiment model in kosmos.db.models.
 
 from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 import logging
 
@@ -407,8 +407,8 @@ class ExperimentProtocol(BaseModel):
     template_version: Optional[str] = None
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     generated_by: str = Field(default="experiment_designer")
 
     @field_validator('description')
@@ -696,4 +696,4 @@ class ValidationReport(BaseModel):
     summary: str = Field(..., description="Human-readable validation summary")
     recommendations: List[str] = Field(default_factory=list)
 
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
