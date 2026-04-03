@@ -21,6 +21,7 @@ class PaperSource(str, Enum):
     PUBMED = "pubmed"
     UNKNOWN = "unknown"
     MANUAL = "manual"
+    OTHER = "other"
 
 
 @dataclass

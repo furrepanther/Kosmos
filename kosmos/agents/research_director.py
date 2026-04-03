@@ -373,10 +373,9 @@ class ResearchDirectorAgent(BaseAgent):
 
     @contextmanager
     def _workflow_context(self):
-        """Context manager for thread-safe workflow access (sync version, not used with async)."""
-        # Note: This is only for backwards compatibility with sync code
-        # Async code should use the async lock directly
-        yield self.workflow
+        """Context manager for thread-safe workflow access (sync version)."""
+        with self._workflow_lock_sync:
+            yield self.workflow
 
     # Async context manager helpers - use asyncio.Lock directly in async code
     # Example: async with self._research_plan_lock: ...
@@ -565,7 +564,7 @@ class ResearchDirectorAgent(BaseAgent):
     # MESSAGE HANDLING
     # ========================================================================
 
-    def process_message(self, message: AgentMessage):
+    async def process_message(self, message: AgentMessage):
         """
         Process incoming message from other agents.
 
@@ -671,7 +670,18 @@ class ResearchDirectorAgent(BaseAgent):
                 f"(attempt {self._consecutive_errors + 1})"
             )
 
-            time.sleep(backoff_seconds)
+            # Use asyncio.sleep if an event loop is running to avoid blocking it;
+            # fall back to time.sleep for sync contexts.
+            try:
+                loop = asyncio.get_running_loop()
+                # Schedule the sleep as a task so we don't block the event loop
+                future = asyncio.run_coroutine_threadsafe(
+                    asyncio.sleep(backoff_seconds), loop
+                )
+                future.result(timeout=backoff_seconds + 5)
+            except RuntimeError:
+                # No running event loop — safe to use blocking sleep
+                time.sleep(backoff_seconds)
 
             # Re-evaluate what action to take
             return self.decide_next_action()

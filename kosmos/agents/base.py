@@ -193,6 +193,7 @@ class BaseAgent:
             return
 
         self.status = AgentStatus.PAUSED
+        self._on_pause()
         logger.info(f"Agent {self.agent_id} paused")
 
     def resume(self):
@@ -202,6 +203,7 @@ class BaseAgent:
             return
 
         self.status = AgentStatus.RUNNING
+        self._on_resume()
         logger.info(f"Agent {self.agent_id} resumed")
 
     def is_running(self) -> bool:

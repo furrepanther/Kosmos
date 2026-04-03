@@ -124,7 +124,8 @@ class SafetyGuardrails:
         Returns:
             SafetyReport with validation results
         """
-        # Check for emergency stop
+        # Check for emergency stop (sync from flag file first)
+        self.sync_from_flag_file()
         if self.is_emergency_stop_active():
             raise RuntimeError(
                 f"Emergency stop active: {self.emergency_stop.reason}"
@@ -203,14 +204,24 @@ class SafetyGuardrails:
             )
 
     def is_emergency_stop_active(self) -> bool:
-        """Check if emergency stop is currently active."""
-        # Update from flag file if exists
+        """Check if emergency stop is currently active (read-only, no side effects)."""
+        return self.emergency_stop.is_active
+
+    def sync_from_flag_file(self) -> bool:
+        """Check flag file and trigger emergency stop if it exists.
+
+        Call this explicitly when you want to update state from the flag file.
+        Separated from is_emergency_stop_active() to avoid a status check
+        unexpectedly mutating state.
+
+        Returns:
+            True if emergency stop is now active.
+        """
         if self.STOP_FLAG_FILE.exists() and not self.emergency_stop.is_active:
             self.trigger_emergency_stop(
                 triggered_by="flag_file",
                 reason="Emergency stop flag file detected"
             )
-
         return self.emergency_stop.is_active
 
     def trigger_emergency_stop(
@@ -331,6 +342,7 @@ class SafetyGuardrails:
             yield
         except Exception as e:
             # Check if exception is due to emergency stop
+            self.sync_from_flag_file()
             if self.is_emergency_stop_active():
                 logger.error(f"Execution interrupted by emergency stop: {e}")
                 raise
@@ -338,6 +350,7 @@ class SafetyGuardrails:
             raise
         finally:
             # Check after execution
+            self.sync_from_flag_file()
             if self.is_emergency_stop_active():
                 logger.warning(
                     f"Emergency stop detected after execution "

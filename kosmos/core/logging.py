@@ -125,7 +125,14 @@ class TextFormatter(logging.Formatter):
         if self.use_colors and sys.stdout.isatty():
             color = self.COLORS.get(record.levelname, self.COLORS["RESET"])
             reset = self.COLORS["RESET"]
-            record.levelname = f"{color}{record.levelname}{reset}"
+            # Use a copy to avoid mutating the shared record's levelname,
+            # which would leak ANSI codes to other handlers (e.g., JSON file handler).
+            original_levelname = record.levelname
+            record.levelname = f"{color}{original_levelname}{reset}"
+            try:
+                return super().format(record)
+            finally:
+                record.levelname = original_levelname
 
         return super().format(record)
 

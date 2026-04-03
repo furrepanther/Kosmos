@@ -7,6 +7,7 @@ Provides alert definitions and notification handlers for critical events.
 import logging
 import os
 import json
+import threading
 import time
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
@@ -523,6 +524,7 @@ def pagerduty_notification_handler(alert: Alert):
 
 # Global alert manager instance
 _alert_manager: Optional[AlertManager] = None
+_alert_manager_lock = threading.Lock()
 
 
 def get_alert_manager() -> AlertManager:
@@ -534,22 +536,31 @@ def get_alert_manager() -> AlertManager:
     """
     global _alert_manager
     if _alert_manager is None:
-        _alert_manager = AlertManager()
+        with _alert_manager_lock:
+            if _alert_manager is None:
+                _alert_manager = AlertManager()
 
-        # Register default notification handlers
-        _alert_manager.add_notification_handler(log_notification_handler)
+                # Register default notification handlers
+                _alert_manager.add_notification_handler(log_notification_handler)
 
-        # Register optional handlers if enabled
-        if os.getenv("ALERT_EMAIL_ENABLED", "false").lower() == "true":
-            _alert_manager.add_notification_handler(email_notification_handler)
+                # Register optional handlers if enabled
+                if os.getenv("ALERT_EMAIL_ENABLED", "false").lower() == "true":
+                    _alert_manager.add_notification_handler(email_notification_handler)
 
-        if os.getenv("ALERT_SLACK_ENABLED", "false").lower() == "true":
-            _alert_manager.add_notification_handler(slack_notification_handler)
+                if os.getenv("ALERT_SLACK_ENABLED", "false").lower() == "true":
+                    _alert_manager.add_notification_handler(slack_notification_handler)
 
-        if os.getenv("ALERT_PAGERDUTY_ENABLED", "false").lower() == "true":
-            _alert_manager.add_notification_handler(pagerduty_notification_handler)
+                if os.getenv("ALERT_PAGERDUTY_ENABLED", "false").lower() == "true":
+                    _alert_manager.add_notification_handler(pagerduty_notification_handler)
 
     return _alert_manager
+
+
+def reset_alert_manager():
+    """Reset the global alert manager (for test isolation)."""
+    global _alert_manager
+    with _alert_manager_lock:
+        _alert_manager = None
 
 
 def evaluate_alerts():
