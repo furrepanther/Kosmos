@@ -182,6 +182,7 @@ class ResearchDirectorAgent(BaseAgent):
 
         # Error recovery tracking
         self._consecutive_errors: int = 0
+        self._actions_this_iteration: int = 0
         self._error_history: List[Dict[str, Any]] = []
         self._last_error_time: Optional[datetime] = None
 
@@ -2465,8 +2466,6 @@ Provide a structured, actionable plan in 2-3 paragraphs.
         current_state = self.workflow.current_state
 
         # Action counter for infinite loop prevention (Issue #51)
-        if not hasattr(self, '_actions_this_iteration'):
-            self._actions_this_iteration = 0
         self._actions_this_iteration += 1
 
         if self._actions_this_iteration > MAX_ACTIONS_PER_ITERATION:

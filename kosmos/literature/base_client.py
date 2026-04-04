@@ -231,7 +231,7 @@ class BaseLiteratureClient(ABC):
             f"Error in {self.get_source_name()} API during {operation}: {str(error)}",
             exc_info=True
         )
-        # Could add retry logic, circuit breaker, etc. here
+        raise
 
     def _validate_query(self, query: str) -> bool:
         """

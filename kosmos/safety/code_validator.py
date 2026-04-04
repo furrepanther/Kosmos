@@ -11,6 +11,7 @@ Enhanced version of code validation with:
 import ast
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
@@ -53,7 +54,7 @@ class CodeValidator:
     ]
 
     # Network-related keywords (warnings)
-    NETWORK_KEYWORDS = ['socket', 'http', 'urllib', 'requests', 'api', 'ftp']
+    NETWORK_KEYWORDS = ['socket', 'http', 'urllib', 'requests', 'ftp']
 
     def __init__(
         self,
@@ -293,7 +294,7 @@ class CodeValidator:
                         warnings.append(f"File operation detected: {pattern}")
                     elif self.allow_file_read:
                         # Check if it's read-only (contains "'r'" or no mode specified)
-                        if any(mode in code for mode in ["'w'", "'a'", "'x'", "mode='w'", 'mode="w"']):
+                        if re.search(r'open\s*\([^)]*(?:["\'][waxWAX][+b]*["\']|mode\s*=\s*["\'][waxWAX])', code):
                             violations.append(SafetyViolation(
                                 type=ViolationType.FILE_SYSTEM_ACCESS,
                                 severity=RiskLevel.HIGH,
@@ -402,7 +403,7 @@ class CodeValidator:
             if guideline.validation_method == "keyword":
                 # Check if any keywords appear in the text
                 for keyword in guideline.keywords:
-                    if keyword.lower() in text_to_check:
+                    if re.search(r'\b' + re.escape(keyword.lower()) + r'\b', text_to_check):
                         if guideline.required:
                             violations.append(SafetyViolation(
                                 type=ViolationType.ETHICAL_VIOLATION,
@@ -443,7 +444,11 @@ class CodeValidator:
         Returns:
             True if human approval is required
         """
-        config = get_config()
+        try:
+            config = get_config()
+        except Exception:
+            logger.warning("Config not available in requires_approval(); defaulting to require approval")
+            return True
 
         # Always require approval if configured
         if config.safety.require_human_approval:

@@ -280,7 +280,7 @@ class AlertManager:
             return db_status["status"] != "healthy"
         except Exception as e:
             logger.warning("Database connection check error: %s", e, exc_info=True)
-            return False
+            return True
 
     def _check_api_failure_rate(self) -> bool:
         """Check if API failure rate is high."""
